@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RCT — LLM Condition (Qualtrics HTML View)</title>
+<!--
+  ════════════════════════════════════════════════════════════════════
+  RCT TREATMENT — LLM CONDITION (self-contained, Qualtrics HTML View)
+  ════════════════════════════════════════════════════════════════════
+
+  HOW TO PASTE INTO QUALTRICS
+  ───────────────────────────
+  1. Create a Text Entry question in your survey.
+  2. Question Text → click the rich-text editor's <> "Source" button
+     (HTML View). Paste EVERYTHING from <style>...</style> through the
+     <div id="rct-root"></div> mount. Save.
+  3. Question gear icon → "Add JavaScript". Paste the contents of the
+     INLINE <script> block at the bottom of this file (everything
+     inside its tags) into the JS panel. Save.
+
+  Some Qualtrics instances preserve <script> tags inside HTML View; if
+  yours does, you can paste the whole file content in one shot. If the
+  script never runs in preview, fall back to the two-target split.
+
+  ⚠  SECURITY: API KEY HANDLING ⚠
+  ─────────────────────────────────
+  The OPENROUTER_API_KEY constant below is shipped to the participant's
+  browser. Anything in client-side JS can be extracted from page source
+  or the network tab. Choose ONE of these, ranked best to worst:
+
+    (a) BACKEND PROXY (RECOMMENDED). Stand up an HTTPS endpoint that
+        forwards to OpenRouter using a server-side env-var key. Replace
+        OPENROUTER_URL below with your proxy URL and remove the
+        Authorization header from the fetch() call. Add per-IP rate
+        limits, a survey-token check, and a daily spend cap.
+
+    (b) Per-session ephemeral key minted at survey start, stored in
+        Qualtrics Embedded Data, read here via getEmbeddedData(...).
+        Reduces blast radius but still client-side.
+
+    (c) HARDCODED KEY — IRB-SUPERVISED PILOT ONLY. Acceptable only with
+        a small (<200) time-bounded pilot, an OpenRouter spend cap on
+        the key, weekly key rotation, and IRB-documented residual risk.
+
+  EMBEDDED DATA FIELDS (declare in Survey Flow first, blank values)
+  ─────────────────────────────────────────────────────────────────
+    LLM_Log, prompt_count, total_response_time_ms, click_count,
+    q1_answer, q2_answer, q3_answer, q4_answer, condition,
+    participant_id, model_used.
+  ════════════════════════════════════════════════════════════════════
+-->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  /* ──────────────────────────────────────────────────────────────
+     RCT layout — Flexbox, fixed 600px frame, internal panel scroll
+     ────────────────────────────────────────────────────────────── */
+  #rct-root, #rct-root *, #rct-root *::before, #rct-root *::after { box-sizing: border-box; }
+  #rct-root {
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    color: #263238;
+    height: 600px;
+    display: flex; flex-direction: column; gap: 12px;
+    padding: 12px;
+    background: #fafafa;
+    border-radius: 4px;
+  }
+  /* Hide Qualtrics' default text-entry input but keep the question recordable */
+  .InputText { display: none !important; }
+
+  .rct-instructions {
+    flex: 0 0 auto;
+    background: #fff; border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+    padding: 12px 16px;
+  }
+  .rct-instructions-title {
+    margin: 0 0 6px 0; font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+    text-transform: uppercase; color: #455a64;
+  }
+  .rct-instructions-body { margin: 0; font-size: 14px; line-height: 1.45; color: #263238; }
+
+  .rct-panes { flex: 1 1 auto; min-height: 0; display: flex; gap: 12px; }
+  .rct-pane {
+    flex: 1 1 50%; min-width: 0; min-height: 0;
+    display: flex; flex-direction: column;
+    background: #fff; border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+  .rct-pane-header {
+    flex: 0 0 auto;
+    padding: 10px 14px; border-bottom: 1px solid #eceff1;
+    font-weight: 500; font-size: 12px; letter-spacing: 0.04em;
+    color: #455a64; text-transform: uppercase; background: #fff;
+  }
+  .rct-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+
+  /* Left pane: chart + question area */
+  .rct-chart-wrap {
+    flex: 0 0 auto;
+    padding: 10px 12px; border-bottom: 1px solid #eceff1; background: #fff;
+    height: 220px; position: relative;
+  }
+  .rct-chart-wrap canvas { width: 100% !important; height: 100% !important; }
+  .rct-question-block { padding: 14px 16px; }
+  .rct-question { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px dashed #eceff1; }
+  .rct-question:last-of-type { border-bottom: none; padding-bottom: 0; }
+  .rct-question-text { margin: 0 0 10px 0; font-size: 14px; line-height: 1.4; color: #263238; }
+  .rct-question-options { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rct-question-options.col { flex-direction: column; gap: 6px; }
+  .rct-option {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; cursor: pointer; user-select: none;
+    padding: 6px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
+    background: #fff; transition: background 120ms, border-color 120ms;
+  }
+  .rct-option:hover { background: #f5f7f8; border-color: #90a4ae; }
+  .rct-option input { accent-color: #1976d2; cursor: pointer; }
+  .rct-option.selected { border-color: #1976d2; background: #e3f2fd; }
+
+  /* Likert scale row */
+  .rct-likert {
+    display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap;
+  }
+  .rct-likert-label {
+    font-size: 12px; color: #607d8b; flex: 0 0 auto;
+  }
+  .rct-likert-buttons { display: inline-flex; gap: 4px; }
+  .rct-likert-buttons label {
+    width: 36px; height: 36px; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid #cfd8dc; border-radius: 50%; cursor: pointer; font-size: 13px;
+    background: #fff; transition: background 120ms, border-color 120ms;
+  }
+  .rct-likert-buttons label:hover { background: #f5f7f8; border-color: #90a4ae; }
+  .rct-likert-buttons label.selected { border-color: #1976d2; background: #1976d2; color: #fff; }
+  .rct-likert-buttons input { display: none; }
+
+  .rct-button {
+    appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
+    font-family: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0.04em;
+    padding: 9px 16px; border-radius: 4px; text-transform: uppercase;
+    transition: background 120ms, box-shadow 120ms, opacity 120ms;
+  }
+  .rct-button-primary { background: #1976d2; color: #fff; }
+  .rct-button-primary:hover:not(:disabled) { background: #1565c0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+  .rct-button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .rct-submit-row { margin-top: 12px; }
+  .rct-submit-hint { margin: 6px 0 0 0; font-size: 12px; color: #78909c; }
+
+  /* Right pane LLM (Condition A): chat */
+  .rct-right.is-locked .rct-pane-header::after {
+    content: ' (locked — answer submitted)'; text-transform: none;
+    font-weight: 400; color: #90a4ae; font-size: 11px; letter-spacing: 0;
+  }
+  #rct-chat-log {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    padding: 12px; display: flex; flex-direction: column; gap: 8px;
+    background: #f7f9fa;
+  }
+  .rct-chat-bubble {
+    max-width: 85%; padding: 9px 13px; border-radius: 14px;
+    font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+  }
+  .rct-chat-user { align-self: flex-end; background: #1976d2; color: #fff; border-bottom-right-radius: 4px; }
+  .rct-chat-assistant { align-self: flex-start; background: #fff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
+  .rct-chat-error { align-self: flex-start; background: #fff3e0; color: #bf360c; border: 1px solid #ffcc80; border-radius: 4px; font-size: 12.5px; }
+  #rct-chat-typing { padding: 4px 14px; font-size: 12px; color: #78909c; font-style: italic; flex: 0 0 auto; }
+  #rct-chat-form {
+    flex: 0 0 auto;
+    display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid #eceff1; background: #fff;
+  }
+  #rct-chat-input {
+    flex: 1 1 auto; padding: 9px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
+    font-family: inherit; font-size: 13px; outline: none;
+  }
+  #rct-chat-input:focus { border-color: #1976d2; box-shadow: 0 0 0 2px rgba(25,118,210,0.15); }
+  #rct-chat-input:disabled { background: #eceff1; cursor: not-allowed; }
+
+  /* Mobile fallback (Qualtrics survey should block mobile) */
+  @media (max-width: 900px) {
+    #rct-root { height: auto; }
+    .rct-panes { flex-direction: column; }
+    .rct-pane { flex: 0 0 auto; min-height: 360px; }
+  }
+</style>
+</head>
+<body>
+<div id="rct-root"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   PASTE-INTO-JS-PANEL CONTENT BEGINS HERE
+   ════════════════════════════════════════════════════════════════════ */
+(function () {
+  'use strict';
+
+  /* ── 1. Bootstrap (Qualtrics or standalone preview) ───────────── */
+  function bootstrap() {
+    if (typeof Qualtrics !== 'undefined' && Qualtrics.SurveyEngine && Qualtrics.SurveyEngine.addOnReady) {
+      Qualtrics.SurveyEngine.addOnReady(function () { runApp(this); });
+      return;
+    }
+    if (window.__rctBootRetries === undefined) window.__rctBootRetries = 0;
+    if (window.__rctBootRetries < 8) {
+      window.__rctBootRetries += 1;
+      setTimeout(bootstrap, 50);
+      return;
+    }
+    document.addEventListener('DOMContentLoaded', function () { runApp(null); });
+    if (document.readyState !== 'loading') runApp(null);
+  }
+
+  /* ── 2. Main application ──────────────────────────────────────── */
+  function runApp(qThis) {
+    if (window.__rctInit) return;          // idempotency: paginate-back / double-fire
+    window.__rctInit = true;
+
+    /* ── 2a. CONFIGURATION — edit before deploying ─────────────── */
+    var CONDITION = 'LLM';
+
+    var OPENROUTER_API_KEY = 'YOUR_KEY_HERE';                                /* ⚠  see security note */
+    var OPENROUTER_URL     = 'https://openrouter.ai/api/v1/chat/completions';
+    var OPENROUTER_REFERER = 'https://your-institution.example/thesis-rct';
+    var OPENROUTER_TITLE   = 'RCT Chart Study';
+    var DEFAULT_MODEL      = 'openai/gpt-4o-mini';
+    var MODEL              = DEFAULT_MODEL;
+
+    var SYSTEM_PROMPT =
+      'You are an assistant helping a participant interpret a chart of company performance. ' +
+      'Be concise, factual, and avoid telling them what to answer. Do not give legal or financial advice.';
+
+    var INSTRUCTIONS_HTML =
+      '<h2 class="rct-instructions-title">Instructions</h2>' +
+      '<p class="rct-instructions-body">Below is a chart of a company\'s recent performance. ' +
+      'Use the chat assistant on the right to research the company, then answer the questions on the left. ' +
+      'You can change your selections until you click <strong>Submit answer</strong>.</p>';
+
+    /* Question schema. Supported types: 'truefalse' | 'mc' | 'mcmulti' | 'likert'.
+       Add/remove freely; the engine and Submit-gating adapt automatically.        */
+    var QUESTIONS = [
+      { id: 'q1', type: 'truefalse', text: 'Based on the chart, this company is profitable.' },
+      { id: 'q2', type: 'mc',        text: 'Which year shows the highest revenue?',
+        options: ['2021', '2022', '2023', '2024'] },
+      { id: 'q3', type: 'mcmulti',   text: 'Which factors does the chart support? (Select all that apply.)',
+        options: ['Year-over-year growth', 'Stable margins', 'A revenue decline in 2023', 'Revenue above $80M in any year'] },
+      { id: 'q4', type: 'likert',    text: 'How confident are you in your answers?',
+        scale: 5, leftLabel: 'Not confident', rightLabel: 'Very confident' }
+    ];
+
+    var CHART_DATA = {
+      title: 'Company Performance — Annual Revenue',
+      yLabel: 'Revenue (USD millions)',
+      bars: [
+        { label: '2021', value: 42 },
+        { label: '2022', value: 58 },
+        { label: '2023', value: 51 },
+        { label: '2024', value: 73 }
+      ]
+    };
+
+    /* ── 2b. Helpers ───────────────────────────────────────────── */
+    function isoNow() { return new Date().toISOString(); }
+    function nowMs()  { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+    function uuid()   {
+      if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+      return 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10);
+    }
+    function esc(s) {
+      return String(s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function getResponseId() {
+      try {
+        if (qThis && Qualtrics.SurveyEngine.getEmbeddedData) {
+          var rid = Qualtrics.SurveyEngine.getEmbeddedData('ResponseID');
+          if (rid) return rid;
+        }
+      } catch (e) {}
+      return 'local-' + Math.random().toString(36).slice(2, 10);
+    }
+
+    /* ── 2c. State and persistence ─────────────────────────────── */
+    var PID = getResponseId();
+    var STATE_KEY = 'rct_state_' + PID + '_' + CONDITION;
+
+    function newState() {
+      var answers = {};
+      QUESTIONS.forEach(function (q) {
+        answers[q.id] = (q.type === 'mcmulti') ? [] : null;
+      });
+      return {
+        session_id: uuid(),
+        participant_id: PID,
+        condition: CONDITION,
+        model_used: MODEL,
+        started_at: isoNow(),
+        events: [],
+        prompt_count: 0,
+        click_count: 0,
+        total_response_time_ms: 0,
+        answers: answers,
+        finalised: false
+      };
+    }
+    function loadState() {
+      try {
+        var raw = localStorage.getItem(STATE_KEY);
+        if (!raw) return null;
+        var s = JSON.parse(raw);
+        if (!s || !s.session_id || !Array.isArray(s.events)) return null;
+        QUESTIONS.forEach(function (q) {
+          if (!(q.id in s.answers)) s.answers[q.id] = (q.type === 'mcmulti' ? [] : null);
+        });
+        return s;
+      } catch (e) { return null; }
+    }
+    function saveState() { try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch (e) {} }
+
+    var state = loadState() || newState();
+
+    function logEvent(evt) { evt.ts = isoNow(); state.events.push(evt); }
+
+    /* ── 2d. Embedded Data flush (debounced) ───────────────────── */
+    var flushTimer = null;
+    function setED(name, value) {
+      if (!qThis) return;
+      try { Qualtrics.SurveyEngine.setEmbeddedData(name, value); }
+      catch (e) { console.warn('[RCT] setEmbeddedData failed:', name, e); }
+    }
+    function flushNow() {
+      saveState();
+      setED('LLM_Log',                JSON.stringify(state));
+      setED('condition',              state.condition);
+      setED('participant_id',         state.participant_id);
+      setED('model_used',             state.model_used || '');
+      setED('prompt_count',           String(state.prompt_count));
+      setED('total_response_time_ms', String(state.total_response_time_ms));
+      setED('click_count',            String(state.click_count));
+      Object.keys(state.answers).forEach(function (qid) {
+        var v = state.answers[qid];
+        var out;
+        if (v === null || v === undefined)  out = '';
+        else if (Array.isArray(v))           out = JSON.stringify(v);
+        else                                 out = String(v);
+        setED(qid + '_answer', out);
+      });
+    }
+    function flush() {
+      if (flushTimer) clearTimeout(flushTimer);
+      flushTimer = setTimeout(flushNow, 250);
+    }
+
+    /* ── 2e. DOM construction ──────────────────────────────────── */
+    var root = document.getElementById('rct-root');
+    if (!root) {
+      console.error('[RCT] mount #rct-root not found — markup not pasted into Question Text?');
+      return;
+    }
+    function $(sel)  { return root.querySelector(sel); }
+    function $$(sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
+
+    function buildDom() {
+      var rightHtml =
+        '<div class="rct-pane-header">Research assistant</div>' +
+        '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="Chat transcript"></div>' +
+        '<div id="rct-chat-typing" style="display:none">Assistant is typing…</div>' +
+        '<form id="rct-chat-form" autocomplete="off">' +
+          '<input id="rct-chat-input" type="text" placeholder="Ask the assistant about the chart…" maxlength="1000" />' +
+          '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">Send</button>' +
+        '</form>';
+
+      root.innerHTML =
+        '<header class="rct-instructions">' + INSTRUCTIONS_HTML + '</header>' +
+        '<div class="rct-panes">' +
+          '<section class="rct-pane rct-left" aria-label="Chart and task questions">' +
+            '<div class="rct-pane-header">Company performance</div>' +
+            '<div class="rct-chart-wrap"><canvas id="rct-chart"></canvas></div>' +
+            '<div class="rct-scroll"><div class="rct-question-block" id="rct-question-area"></div></div>' +
+          '</section>' +
+          '<section class="rct-pane rct-right" aria-label="Research assistant">' +
+            rightHtml +
+          '</section>' +
+        '</div>';
+    }
+
+    /* ── 2f. Chart.js render ───────────────────────────────────── */
+    var chartInstance = null;
+    function renderChart() {
+      var canvas = $('#rct-chart');
+      if (!canvas) return;
+      if (typeof Chart === 'undefined') {
+        canvas.parentNode.innerHTML =
+          '<p style="color:#bf360c;font-size:13px;padding:8px">Chart.js failed to load (CDN blocked?). ' +
+          'Refresh, or contact the survey administrator.</p>';
+        return;
+      }
+      if (chartInstance) chartInstance.destroy();
+      chartInstance = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: CHART_DATA.bars.map(function (b) { return b.label; }),
+          datasets: [{
+            label: CHART_DATA.yLabel,
+            data: CHART_DATA.bars.map(function (b) { return b.value; }),
+            backgroundColor: '#1976d2',
+            borderRadius: 2
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: { duration: 300 },
+          plugins: {
+            title: { display: true, text: CHART_DATA.title, font: { size: 13, weight: '500' } },
+            legend: { display: false },
+            tooltip: { enabled: true }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              title: { display: true, text: CHART_DATA.yLabel, font: { size: 11 } },
+              ticks: { font: { size: 11 } }
+            },
+            x: { ticks: { font: { size: 11 } } }
+          }
+        }
+      });
+    }
+
+    /* ── 2g. Question engine — 4 types ─────────────────────────── */
+    function renderQuestions() {
+      var holder = $('#rct-question-area');
+      var html = '';
+      QUESTIONS.forEach(function (q) {
+        html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
+        html += '<p class="rct-question-text">' + esc(q.text) + '</p>';
+        if (q.type === 'truefalse')      html += renderTF(q);
+        else if (q.type === 'mc')        html += renderMC(q);
+        else if (q.type === 'mcmulti')   html += renderMCMulti(q);
+        else if (q.type === 'likert')    html += renderLikert(q);
+        html += '</div>';
+      });
+      html +=
+        '<div class="rct-submit-row">' +
+          '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>Submit answer</button>' +
+          '<p class="rct-submit-hint" id="rct-submit-hint">You can change your selection until you click Submit.</p>' +
+        '</div>';
+      holder.innerHTML = html;
+
+      QUESTIONS.forEach(function (q) {
+        wireQuestion(q);
+        restoreAnswer(q);
+      });
+      $('#rct-submit-final').addEventListener('click', onSubmitClick);
+      refreshSubmit();
+    }
+
+    function renderTF(q) {
+      var name = 'rct-' + q.id;
+      return '<div class="rct-question-options">' +
+        '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>' +
+        '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>' +
+        '</div>';
+    }
+    function renderMC(q) {
+      var name = 'rct-' + q.id;
+      var opts = (q.options || []).map(function (o, i) {
+        return '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(String(i)) + '"/><span>' + esc(o) + '</span></label>';
+      }).join('');
+      return '<div class="rct-question-options col">' + opts + '</div>';
+    }
+    function renderMCMulti(q) {
+      var name = 'rct-' + q.id;
+      var opts = (q.options || []).map(function (o, i) {
+        return '<label class="rct-option"><input type="checkbox" name="' + name + '" value="' + esc(String(i)) + '"/><span>' + esc(o) + '</span></label>';
+      }).join('');
+      return '<div class="rct-question-options col">' + opts + '</div>';
+    }
+    function renderLikert(q) {
+      var name = 'rct-' + q.id;
+      var n = q.scale || 5;
+      var btns = '';
+      for (var i = 1; i <= n; i++) {
+        btns += '<label data-value="' + i + '"><input type="radio" name="' + name + '" value="' + i + '"/><span>' + i + '</span></label>';
+      }
+      return '<div class="rct-likert">' +
+        '<span class="rct-likert-label">' + esc(q.leftLabel || '') + '</span>' +
+        '<div class="rct-likert-buttons">' + btns + '</div>' +
+        '<span class="rct-likert-label">' + esc(q.rightLabel || '') + '</span>' +
+        '</div>';
+    }
+
+    function wireQuestion(q) {
+      var inputs = $$('input[name="rct-' + q.id + '"]');
+      inputs.forEach(function (input) {
+        input.addEventListener('change', function () {
+          if (state.finalised) return;
+          var value;
+          if (q.type === 'truefalse')      value = (input.value === 'true');
+          else if (q.type === 'mc')        value = parseInt(input.value, 10);
+          else if (q.type === 'likert')    value = parseInt(input.value, 10);
+          else if (q.type === 'mcmulti') {
+            var checked = $$('input[name="rct-' + q.id + '"]:checked').map(function (i) { return parseInt(i.value, 10); });
+            value = checked;
+          }
+          state.answers[q.id] = value;
+          logEvent({ type: 'answer_change', question_id: q.id, value: value });
+          updateOptionStyling(q);
+          flush();
+          refreshSubmit();
+        });
+      });
+    }
+
+    function updateOptionStyling(q) {
+      var inputs = $$('input[name="rct-' + q.id + '"]');
+      inputs.forEach(function (input) {
+        var label = input.closest('label');
+        if (!label) return;
+        if (input.checked) label.classList.add('selected');
+        else               label.classList.remove('selected');
+      });
+    }
+
+    function restoreAnswer(q) {
+      var v = state.answers[q.id];
+      if (q.type === 'mcmulti') {
+        if (Array.isArray(v) && v.length) {
+          v.forEach(function (idx) {
+            var sel = $('input[name="rct-' + q.id + '"][value="' + idx + '"]');
+            if (sel) sel.checked = true;
+          });
+        }
+      } else if (v !== null && v !== undefined) {
+        var val = (q.type === 'truefalse') ? (v ? 'true' : 'false') : String(v);
+        var sel = $('input[name="rct-' + q.id + '"][value="' + val + '"]');
+        if (sel) sel.checked = true;
+      }
+      updateOptionStyling(q);
+    }
+
+    function isAnswered(q) {
+      var v = state.answers[q.id];
+      if (q.type === 'mcmulti') return Array.isArray(v) && v.length > 0;
+      return v !== null && v !== undefined && v !== '';
+    }
+    function allAnswered() { return QUESTIONS.every(isAnswered); }
+
+    function refreshSubmit() {
+      var btn = $('#rct-submit-final');
+      if (!btn) return;
+      btn.disabled = state.finalised || !allAnswered();
+    }
+
+    /* ── 2h. Submit handler — wait for in-flight stream if any ── */
+    function onSubmitClick() {
+      if (state.finalised || !allAnswered()) return;
+      state.click_count += 1;
+      logEvent({ type: 'submit_click', stream_in_flight: !!state.streamInFlight });
+      if (state.streamInFlight) {
+        state.pendingSubmit = true;
+        var btn = $('#rct-submit-final');
+        if (btn) { btn.disabled = true; btn.textContent = 'Submitting after response…'; }
+        var hint = $('#rct-submit-hint');
+        if (hint) hint.textContent = 'Waiting for the assistant to finish before locking your answer.';
+        flush();
+        return;
+      }
+      finalizeSubmit();
+    }
+
+    function finalizeSubmit() {
+      if (state.finalised) return;
+      QUESTIONS.forEach(function (q) {
+        logEvent({ type: 'answer_final', question_id: q.id, value: state.answers[q.id] });
+      });
+      state.finalised = true;
+      state.pendingSubmit = false;
+      logEvent({ type: 'panel_locked' });
+      lockPanel();
+      flushNow();
+      var btn = $('#rct-submit-final');
+      if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
+      var hint = $('#rct-submit-hint');
+      if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+      $$('#rct-question-area input').forEach(function (i) { i.disabled = true; });
+      if (qThis && qThis.showNextButton) { try { qThis.showNextButton(); } catch (e) {} }
+    }
+
+    function lockPanel() {
+      var rp = $('.rct-right'); if (rp) rp.classList.add('is-locked');
+      ['#rct-chat-input', '#rct-chat-send'].forEach(function (sel) {
+        var el = $(sel); if (el) el.disabled = true;
+      });
+    }
+
+    /* ── 2i. LLM streaming chat (OpenRouter SSE) ──────────────── */
+    function appendBubble(role, content) {
+      var logEl = $('#rct-chat-log');
+      if (!logEl) return null;
+      var div = document.createElement('div');
+      div.className = 'rct-chat-bubble rct-chat-' + role;
+      div.textContent = content || '';
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+      return div;
+    }
+    function setChatBusy(busy) {
+      var input = $('#rct-chat-input');
+      var btn = $('#rct-chat-send');
+      if (input) input.disabled = busy || state.finalised;
+      if (btn)   btn.disabled   = busy || state.finalised;
+      var typing = $('#rct-chat-typing');
+      if (typing) typing.style.display = busy ? '' : 'none';
+    }
+    function buildHistory() {
+      var msgs = [{ role: 'system', content: SYSTEM_PROMPT }];
+      state.events.forEach(function (e) {
+        if (e.type === 'prompt')        msgs.push({ role: 'user', content: e.content });
+        else if (e.type === 'response') msgs.push({ role: 'assistant', content: e.content });
+      });
+      return msgs;
+    }
+    function replayChat() {
+      var logEl = $('#rct-chat-log'); if (!logEl) return;
+      logEl.innerHTML = '';
+      state.events.forEach(function (e) {
+        if (e.type === 'prompt')        appendBubble('user', e.content);
+        else if (e.type === 'response') appendBubble('assistant', e.content);
+        else if (e.type === 'error')    appendBubble('error', 'Error: ' + (e.error || 'unknown'));
+      });
+    }
+    function wireChat() {
+      var form = $('#rct-chat-form');
+      var input = $('#rct-chat-input');
+      if (!form || !input) return;
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var text = input.value.trim();
+        if (!text || state.finalised || state.streamInFlight) return;
+        state.click_count += 1;
+        input.value = '';
+        sendChat(text);
+      });
+    }
+
+    function sendChat(userText) {
+      logEvent({ type: 'prompt', content: userText });
+      state.prompt_count += 1;
+      appendBubble('user', userText);
+
+      var history = buildHistory();
+      var bubble = appendBubble('assistant', '');
+      if (bubble) bubble.textContent = '…';
+      state.streamInFlight = true;
+      setChatBusy(true);
+      flush();
+
+      var t0 = nowMs();
+      var full = '';
+      var firstChunk = true;
+      var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      state.streamAbort = ctrl;
+
+      fetch(OPENROUTER_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + OPENROUTER_API_KEY,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': OPENROUTER_REFERER,
+          'X-Title': OPENROUTER_TITLE,
+          'Accept': 'text/event-stream'
+        },
+        body: JSON.stringify({ model: MODEL, messages: history, stream: true }),
+        signal: ctrl ? ctrl.signal : undefined
+      }).then(function (resp) {
+        if (!resp.ok) {
+          return resp.text().then(function (txt) {
+            throw new Error('HTTP ' + resp.status + ': ' + txt.slice(0, 240));
+          });
+        }
+        var reader = resp.body.getReader();
+        var dec = new TextDecoder();
+        var buf = '';
+        function pump() {
+          return reader.read().then(function (chunk) {
+            if (chunk.done) return;
+            buf += dec.decode(chunk.value, { stream: true });
+            var lines = buf.split('\n');
+            buf = lines.pop();                             /* keep partial line */
+            for (var i = 0; i < lines.length; i++) {
+              var ln = lines[i].trim();
+              if (!ln) continue;
+              if (ln.indexOf(':') === 0) continue;          /* SSE comment / keep-alive */
+              if (ln.indexOf('data:') !== 0) continue;
+              var data = ln.slice(5).trim();
+              if (data === '[DONE]') return;
+              try {
+                var json = JSON.parse(data);
+                var delta = json.choices && json.choices[0] && json.choices[0].delta && json.choices[0].delta.content;
+                if (typeof delta === 'string' && delta.length) {
+                  if (firstChunk) { firstChunk = false; if (bubble) bubble.textContent = ''; }
+                  full += delta;
+                  if (bubble) {
+                    bubble.textContent = full;
+                    var logEl = $('#rct-chat-log');
+                    if (logEl) logEl.scrollTop = logEl.scrollHeight;
+                  }
+                }
+              } catch (e) { /* malformed frame, skip */ }
+            }
+            return pump();
+          });
+        }
+        return pump();
+      }).then(function () {
+        var lat = Math.round(nowMs() - t0);
+        if (!full) {
+          if (bubble) bubble.textContent = '(empty response)';
+          logEvent({ type: 'error', error: 'empty_response', latency_ms: lat });
+        } else {
+          logEvent({ type: 'response', content: full, latency_ms: lat, http_status: 200 });
+          state.total_response_time_ms += lat;
+        }
+        state.streamInFlight = false;
+        state.streamAbort = null;
+        setChatBusy(false);
+        flush();
+        if (state.pendingSubmit) finalizeSubmit();
+      }).catch(function (err) {
+        var lat = Math.round(nowMs() - t0);
+        var msg = String(err && err.message || err);
+        logEvent({ type: 'error', error: msg, latency_ms: lat });
+        if (bubble) bubble.remove();
+        appendBubble('error', 'Could not reach the assistant: ' + msg);
+        state.streamInFlight = false;
+        state.streamAbort = null;
+        setChatBusy(false);
+        flush();
+        if (state.pendingSubmit) finalizeSubmit();
+      });
+    }
+
+    /* ── 2j. Boot ──────────────────────────────────────────────── */
+    if (qThis && qThis.hideNextButton) { try { qThis.hideNextButton(); } catch (e) {} }
+
+    buildDom();
+    renderChart();
+    renderQuestions();
+    wireChat();
+    replayChat();
+
+    if (state.finalised) {
+      lockPanel();
+      var btn = $('#rct-submit-final');
+      if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
+      var hint = $('#rct-submit-hint');
+      if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+      $$('#rct-question-area input').forEach(function (i) { i.disabled = true; });
+      if (qThis && qThis.showNextButton) { try { qThis.showNextButton(); } catch (e) {} }
+    }
+
+    flushNow();
+    console.log('[RCT] init complete — condition=' + CONDITION + ', pid=' + PID + (qThis ? ' (Qualtrics)' : ' (standalone preview)'));
+  }
+
+  bootstrap();
+})();
+/* ════════════════════════════════════════════════════════════════════
+   PASTE-INTO-JS-PANEL CONTENT ENDS HERE
+   ════════════════════════════════════════════════════════════════════ */
+</script>
+</body>
+</html>

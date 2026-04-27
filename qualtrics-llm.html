@@ -1,0 +1,27 @@
+<!--
+  LLM-CONDITION QUALTRICS QUESTION TEXT
+  ====================================================================
+  After deploying embed.html (see README), replace EMBED_URL below with
+  your hosted URL (e.g. https://yourname.github.io/thesis/embed.html).
+  Then paste the single <iframe> line into the question's Question Text
+  via the rich-text editor → Source view (the <> button). Do NOT paste
+  this comment.
+
+  ${e://Field/ResponseID} is a Qualtrics piped-text expression that
+  inserts the participant's response ID, so each chat session is keyed
+  to that participant in your data.
+
+  The companion script in qualtrics-question-js.js (paste into the
+  question's JavaScript panel) listens for postMessage events from the
+  iframe and writes them to Qualtrics Embedded Data.
+  ====================================================================
+-->
+<iframe
+  src="EMBED_URL?condition=LLM&pid=${e://Field/ResponseID}"
+  width="100%"
+  height="800"
+  frameborder="0"
+  style="border:none; display:block; width:100%; min-height:700px;"
+  allow="clipboard-write"
+  title="Research tools — LLM condition">
+</iframe>

@@ -1,0 +1,701 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RCT Embed</title>
+<!--
+  ====================================================================
+  RCT TREATMENT EMBED — designed to be served from a public URL and
+  embedded into a Qualtrics question via an <iframe>. Architecture
+  modelled on Simple Chat (Bermudez Schettino, Dasmeh & Brinkmann,
+  arXiv:2511.19123) — Qualtrics holds only the iframe tag, this page
+  holds the entire experimental UI. All Qualtrics editor mangling
+  problems disappear because Qualtrics never touches this HTML.
+
+  URL parameters:
+    condition   — 'LLM' or 'SEARCH' (required)
+    pid         — participant id (optional but recommended; usually
+                  ${e://Field/ResponseID} from Qualtrics)
+    model       — OpenRouter model id, overrides default (optional)
+
+  Communication with the Qualtrics parent:
+    The page posts JSON messages to window.parent on every interaction:
+      { type: 'rct_log_update', payload: <InteractionLog> }
+      { type: 'rct_complete' }                 (final answer submitted)
+      { type: 'rct_height',     value: <px> }  (suggested iframe height)
+    The Qualtrics-side script (qualtrics-question-js.js) listens for
+    these and writes Embedded Data, shows the Next button, and
+    auto-resizes the iframe.
+
+  SECURITY: see qualtrics-question-js.js header for API-key handling
+  options. The placeholder below is fine for IRB-supervised pilots.
+  ====================================================================
+-->
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    color: #37474f; background: #fafafa;
+    min-height: 100vh;
+  }
+
+  .rct-root {
+    display: flex; flex-direction: column; gap: 16px;
+    padding: 16px; min-height: 100vh;
+  }
+
+  .rct-instructions {
+    background: #fff; border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+    padding: 16px 20px;
+  }
+  .rct-instructions-title {
+    margin: 0 0 8px 0; font-size: 14px; font-weight: 500; letter-spacing: 0.02em;
+    text-transform: uppercase; color: #455a64;
+  }
+  .rct-instructions-body { margin: 0; font-size: 15px; line-height: 1.5; color: #263238; }
+
+  .rct-panes { display: flex; gap: 16px; min-height: 560px; }
+  .rct-pane {
+    flex: 1 1 50%; display: flex; flex-direction: column;
+    background: #fff; border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+    overflow: hidden; min-width: 0;
+  }
+  .rct-pane-header {
+    padding: 12px 16px; border-bottom: 1px solid #eceff1;
+    font-weight: 500; font-size: 14px; letter-spacing: 0.02em;
+    color: #455a64; text-transform: uppercase; background: #fff;
+  }
+  .rct-left { display: flex; flex-direction: column; }
+  .rct-chart-area { padding: 16px; border-bottom: 1px solid #eceff1; background: #fff; }
+  .rct-chart-svg { width: 100%; height: auto; display: block; }
+  .rct-chart-title { font-size: 14px; font-weight: 500; fill: #263238; }
+  .rct-chart-axis-label { font-size: 11px; fill: #607d8b; }
+  .rct-chart-grid { stroke: #eceff1; stroke-width: 1; }
+  .rct-chart-axis { stroke: #b0bec5; stroke-width: 1; }
+  .rct-chart-tick { font-size: 11px; fill: #607d8b; }
+  .rct-chart-bar { fill: #1976d2; }
+  .rct-chart-value { font-size: 11px; fill: #263238; font-weight: 500; }
+  .rct-chart-xlabel { font-size: 11px; fill: #455a64; }
+
+  .rct-question-block { padding: 16px; flex: 1 1 auto; }
+  .rct-question { margin-bottom: 16px; }
+  .rct-question-text { margin: 0 0 12px 0; font-size: 15px; line-height: 1.4; color: #263238; }
+  .rct-question-options { display: flex; gap: 24px; }
+  .rct-option {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 14px; cursor: pointer; user-select: none;
+    padding: 6px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
+    background: #fff; transition: background 120ms, border-color 120ms;
+  }
+  .rct-option:hover { background: #f5f7f8; border-color: #90a4ae; }
+  .rct-option input { accent-color: #1976d2; cursor: pointer; }
+
+  .rct-button {
+    appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
+    font-family: inherit; font-size: 14px; font-weight: 500; letter-spacing: 0.02em;
+    padding: 10px 18px; border-radius: 4px; text-transform: uppercase;
+    transition: background 120ms, box-shadow 120ms, opacity 120ms;
+  }
+  .rct-button-primary { background: #1976d2; color: #fff; }
+  .rct-button-primary:hover:not(:disabled) { background: #1565c0; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+  .rct-button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .rct-submit-hint { margin-top: 8px; font-size: 12px; color: #78909c; }
+
+  .rct-right { display: flex; flex-direction: column; }
+  .rct-right.is-locked .rct-pane-header::after {
+    content: ' (locked — answer submitted)'; text-transform: none;
+    font-weight: 400; color: #90a4ae; font-size: 12px; letter-spacing: 0;
+  }
+
+  /* LLM chat */
+  #right-panel-llm { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  #rct-chat-log {
+    flex: 1 1 auto; overflow-y: auto;
+    padding: 16px; display: flex; flex-direction: column; gap: 8px;
+    background: #f7f9fa; min-height: 280px;
+  }
+  .rct-chat-bubble {
+    max-width: 85%; padding: 10px 14px; border-radius: 16px;
+    font-size: 14px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+  }
+  .rct-chat-user { align-self: flex-end; background: #1976d2; color: #fff; border-bottom-right-radius: 4px; }
+  .rct-chat-assistant { align-self: flex-start; background: #fff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
+  .rct-chat-error { align-self: flex-start; background: #fff3e0; color: #bf360c; border: 1px solid #ffcc80; border-radius: 4px; font-size: 13px; }
+  #rct-chat-typing { padding: 4px 16px; font-size: 12px; color: #78909c; font-style: italic; }
+  #rct-chat-form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #eceff1; background: #fff; }
+  #rct-chat-input {
+    flex: 1 1 auto; padding: 10px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
+    font-family: inherit; font-size: 14px; outline: none;
+  }
+  #rct-chat-input:focus { border-color: #1976d2; box-shadow: 0 0 0 2px rgba(25,118,210,0.15); }
+  #rct-chat-input:disabled { background: #eceff1; cursor: not-allowed; }
+
+  /* Search */
+  #right-panel-search { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+  #rct-search-form { display: flex; gap: 8px; padding: 16px; border-bottom: 1px solid #eceff1; }
+  #rct-search-input {
+    flex: 1 1 auto; padding: 10px 14px; border: 1px solid #cfd8dc; border-radius: 24px;
+    font-family: inherit; font-size: 14px; outline: none;
+  }
+  #rct-search-input:focus { border-color: #1976d2; box-shadow: 0 0 0 2px rgba(25,118,210,0.15); }
+  #rct-search-input:disabled { background: #eceff1; cursor: not-allowed; }
+  #rct-search-results { flex: 1 1 auto; overflow-y: auto; padding: 16px; background: #fff; }
+  .rct-search-meta { margin: 0 0 16px 0; font-size: 12px; color: #78909c; }
+  .rct-search-result { margin-bottom: 20px; }
+  .rct-search-url { font-size: 12px; color: #2e7d32; margin-bottom: 2px; }
+  .rct-search-title { display: block; font-size: 16px; color: #1a0dab; text-decoration: none; margin-bottom: 4px; cursor: default; }
+  .rct-search-title:hover { text-decoration: underline; }
+  .rct-search-snippet { margin: 0; font-size: 13px; color: #4d5156; line-height: 1.45; }
+  #rct-search-spinner { padding: 16px; font-size: 13px; color: #78909c; font-style: italic; }
+
+  /* Setup error / fatal screens */
+  .rct-fatal {
+    margin: 24px auto; max-width: 640px; padding: 24px;
+    background: #fff; border-left: 4px solid #c62828; border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+  }
+  .rct-fatal h2 { margin: 0 0 8px 0; color: #c62828; font-size: 16px; }
+  .rct-fatal p { margin: 0 0 8px 0; font-size: 14px; line-height: 1.5; }
+  .rct-fatal code { background: #eceff1; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+
+  /* Stack panes vertically below 900px (e.g. mobile, narrow Qualtrics) */
+  @media (max-width: 900px) {
+    .rct-panes { flex-direction: column; min-height: auto; }
+    .rct-pane { flex: 0 0 auto; min-height: 360px; }
+  }
+</style>
+</head>
+<body>
+<div class="rct-root" id="rct-root"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ==================================================================
+   * CONFIGURATION — edit before deploying
+   * ================================================================== */
+
+  // OpenRouter API key handling. Anything shipped to the participant's
+  // browser is extractable. Choose ONE option:
+  //   (a) RECOMMENDED: backend proxy. Replace OPENROUTER_URL with your
+  //       proxy and drop the Authorization header from the fetch call.
+  //   (b) Per-session ephemeral key passed via URL parameter.
+  //   (c) Hardcoded for IRB-supervised pilots only, with a spend cap on
+  //       the OpenRouter key, weekly rotation, and methods-section
+  //       documentation. The placeholder below assumes (c).
+  var OPENROUTER_API_KEY = 'YOUR_KEY_HERE';
+  var OPENROUTER_URL     = 'https://openrouter.ai/api/v1/chat/completions';
+  var OPENROUTER_REFERER = 'https://your-institution.example/thesis-rct';
+  var OPENROUTER_TITLE   = 'RCT Chart Study';
+  var DEFAULT_MODEL      = 'openai/gpt-4o-mini';
+
+  var SYSTEM_PROMPT =
+    'You are an assistant helping a participant interpret a chart of company performance. ' +
+    'Be concise, factual, and avoid telling them what to answer. Do not give legal or financial advice.';
+
+  var INSTRUCTIONS_HTML =
+    '<h2 class="rct-instructions-title">Instructions</h2>' +
+    '<p class="rct-instructions-body">Sample text</p>';
+
+  var QUESTIONS = [
+    { id: 'q1', type: 'truefalse', text: 'Based on the chart, this company is profitable.' }
+  ];
+
+  var CHART_DATA = {
+    title: 'Company Performance',
+    yLabel: 'Revenue (USD millions)',
+    bars: [
+      { label: '2021', value: 42 },
+      { label: '2022', value: 58 },
+      { label: '2023', value: 51 },
+      { label: '2024', value: 73 }
+    ]
+  };
+
+  var SEARCH_RESULTS = [
+    { title: 'Acme Corp Annual Report 2024 — Investor Relations',
+      url: 'investors.acmecorp.com/annual-report-2024',
+      snippet: 'Acme Corp reported full-year revenue of $73M, up 43% YoY. Operating income of $11.4M reflects continued margin expansion despite headwinds in the components segment.' },
+    { title: 'Acme Corp posts record Q4 — Reuters',
+      url: 'reuters.com/business/acme-corp-q4',
+      snippet: 'Net income climbed to $9.2M in fiscal 2024, the company’s third consecutive profitable year. Shares rose 4% in after-hours trading.' },
+    { title: 'Is Acme Corp a Buy? — Seeking Alpha',
+      url: 'seekingalpha.com/article/acme-corp-analysis',
+      snippet: 'Margins remain pressured by raw-material costs, but consistent revenue growth and positive operating cash flow suggest the underlying business is sound.' },
+    { title: 'Acme Corp — Wikipedia',
+      url: 'en.wikipedia.org/wiki/Acme_Corp',
+      snippet: 'American manufacturing company. As of 2024, the company employs ~1,200 people and trades on NASDAQ. Reported its first profitable year in 2022 after a multi-year turnaround.' }
+  ];
+
+  var SEARCH_LATENCY_MIN_MS = 400;
+  var SEARCH_LATENCY_MAX_MS = 800;
+
+  /* ==================================================================
+   * URL parameter parsing
+   * ================================================================== */
+  function getParam(name) {
+    var m = new RegExp('[?&]' + name + '=([^&#]*)').exec(location.search);
+    return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null;
+  }
+
+  var rawCondition = (getParam('condition') || '').toUpperCase();
+  var CONDITION = (rawCondition === 'LLM' || rawCondition === 'SEARCH') ? rawCondition : null;
+  var PID       = getParam('pid')   || ('local-' + Math.random().toString(36).slice(2, 10));
+  var MODEL     = getParam('model') || DEFAULT_MODEL;
+
+  var root = document.getElementById('rct-root');
+
+  if (!CONDITION) {
+    root.innerHTML =
+      '<div class="rct-fatal">' +
+      '<h2>Missing condition parameter</h2>' +
+      '<p>This embed must be loaded with a <code>condition</code> query parameter, ' +
+         'either <code>LLM</code> or <code>SEARCH</code>.</p>' +
+      '<p>Example: <code>embed.html?condition=LLM&amp;pid=test123</code></p>' +
+      '</div>';
+    return;
+  }
+
+  /* ==================================================================
+   * Postmessage to Qualtrics parent
+   * ================================================================== */
+  function postToParent(msg) {
+    if (window.parent && window.parent !== window) {
+      try { window.parent.postMessage(msg, '*'); } catch (e) { /* same-origin sandbox */ }
+    }
+  }
+
+  function postHeight() {
+    var h = document.documentElement.scrollHeight;
+    postToParent({ type: 'rct_height', value: h });
+  }
+
+  /* ==================================================================
+   * Per-participant local persistence (refresh resilience)
+   * ================================================================== */
+  var STORAGE_KEY = 'rct_log_' + PID + '_' + CONDITION;
+
+  function isoNow() { return new Date().toISOString(); }
+
+  function newLog() {
+    var initialAnswers = {};
+    QUESTIONS.forEach(function (q) { initialAnswers[q.id] = null; });
+    return {
+      session_id: (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : 'sess-' + Date.now() + '-' + Math.random().toString(36).slice(2, 10),
+      participant_id: PID,
+      condition: CONDITION,
+      model_used: CONDITION === 'LLM' ? MODEL : null,
+      started_at: isoNow(),
+      events: [],
+      prompt_count: 0,
+      answers: initialAnswers
+    };
+  }
+
+  function loadLog() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      if (!parsed || !parsed.session_id || !parsed.events) return null;
+      QUESTIONS.forEach(function (q) {
+        if (!(q.id in parsed.answers)) parsed.answers[q.id] = null;
+      });
+      return parsed;
+    } catch (e) {
+      console.warn('[RCT] failed to load stored log:', e);
+      return null;
+    }
+  }
+
+  function saveLog() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(log)); } catch (e) {}
+  }
+
+  function persist() {
+    saveLog();
+    postToParent({ type: 'rct_log_update', payload: log });
+  }
+
+  function logEvent(evt) {
+    evt.ts = isoNow();
+    log.events.push(evt);
+  }
+
+  var log = loadLog() || newLog();
+
+  /* ==================================================================
+   * DOM construction
+   * ================================================================== */
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function buildDom() {
+    var rightHtml;
+    if (CONDITION === 'LLM') {
+      rightHtml =
+        '<div id="right-panel-llm">' +
+          '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="Chat transcript"></div>' +
+          '<div id="rct-chat-typing" style="display:none">Assistant is typing…</div>' +
+          '<form id="rct-chat-form" autocomplete="off">' +
+            '<input id="rct-chat-input" type="text" placeholder="Ask the assistant about the chart…" maxlength="1000" />' +
+            '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">Send</button>' +
+          '</form>' +
+        '</div>';
+    } else {
+      rightHtml =
+        '<div id="right-panel-search">' +
+          '<form id="rct-search-form" autocomplete="off" role="search">' +
+            '<input id="rct-search-input" type="text" placeholder="Search the web…" maxlength="200" />' +
+            '<button id="rct-search-button" type="submit" class="rct-button rct-button-primary">Search</button>' +
+          '</form>' +
+          '<div id="rct-search-spinner" style="display:none">Searching…</div>' +
+          '<div id="rct-search-results" aria-live="polite"></div>' +
+        '</div>';
+    }
+    root.innerHTML =
+      '<header class="rct-instructions">' + INSTRUCTIONS_HTML + '</header>' +
+      '<div class="rct-panes">' +
+        '<section class="rct-pane rct-left" aria-label="Chart and task questions">' +
+          '<div class="rct-pane-header">Company performance</div>' +
+          '<div class="rct-chart-area" id="chart-root"></div>' +
+          '<div class="rct-question-block" id="question-area"></div>' +
+        '</section>' +
+        '<section class="rct-pane rct-right" aria-label="Information retrieval">' +
+          '<div class="rct-pane-header">Research tools</div>' +
+          rightHtml +
+        '</section>' +
+      '</div>';
+  }
+
+  function $(sel)  { return root.querySelector(sel); }
+  function $$(sel) { return Array.prototype.slice.call(root.querySelectorAll(sel)); }
+
+  /* ==================================================================
+   * Chart, questions, and treatment renderers
+   * ================================================================== */
+  function renderChart() {
+    var holder = $('#chart-root');
+    var bars = CHART_DATA.bars;
+    var W = 480, H = 280;
+    var pad = { top: 32, right: 16, bottom: 44, left: 56 };
+    var plotW = W - pad.left - pad.right;
+    var plotH = H - pad.top - pad.bottom;
+    var maxV = Math.max.apply(null, bars.map(function (b) { return b.value; }));
+    var niceMax = Math.ceil(maxV / 10) * 10 || 10;
+    var ticks = [0, niceMax * 0.25, niceMax * 0.5, niceMax * 0.75, niceMax];
+    var barW = plotW / bars.length * 0.6;
+    var step = plotW / bars.length;
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(CHART_DATA.title) + '" class="rct-chart-svg">';
+    svg += '<text x="' + (W / 2) + '" y="20" text-anchor="middle" class="rct-chart-title">' + esc(CHART_DATA.title) + '</text>';
+    svg += '<text x="-' + (pad.top + plotH / 2) + '" y="14" transform="rotate(-90)" text-anchor="middle" class="rct-chart-axis-label">' + esc(CHART_DATA.yLabel) + '</text>';
+    ticks.forEach(function (t) {
+      var y = pad.top + plotH - (t / niceMax) * plotH;
+      svg += '<line x1="' + pad.left + '" y1="' + y + '" x2="' + (pad.left + plotW) + '" y2="' + y + '" class="rct-chart-grid"/>';
+      svg += '<text x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" class="rct-chart-tick">' + t + '</text>';
+    });
+    svg += '<line x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (pad.top + plotH) + '" class="rct-chart-axis"/>';
+    svg += '<line x1="' + pad.left + '" y1="' + (pad.top + plotH) + '" x2="' + (pad.left + plotW) + '" y2="' + (pad.top + plotH) + '" class="rct-chart-axis"/>';
+    bars.forEach(function (b, i) {
+      var x = pad.left + i * step + (step - barW) / 2;
+      var h = (b.value / niceMax) * plotH;
+      var y = pad.top + plotH - h;
+      svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="2" class="rct-chart-bar"/>';
+      svg += '<text x="' + (x + barW / 2) + '" y="' + (y - 6) + '" text-anchor="middle" class="rct-chart-value">' + b.value + '</text>';
+      svg += '<text x="' + (x + barW / 2) + '" y="' + (pad.top + plotH + 20) + '" text-anchor="middle" class="rct-chart-xlabel">' + esc(b.label) + '</text>';
+    });
+    svg += '</svg>';
+    holder.innerHTML = svg;
+  }
+
+  function renderQuestions() {
+    var holder = $('#question-area');
+    var html = '';
+    QUESTIONS.forEach(function (q) {
+      html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
+      html += '<p class="rct-question-text">' + esc(q.text) + '</p>';
+      if (q.type === 'truefalse') {
+        var name = 'rct-' + q.id;
+        html += '<div class="rct-question-options">';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>';
+        html += '</div>';
+      }
+      html += '</div>';
+    });
+    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>Submit answer</button>';
+    html += '<p class="rct-submit-hint">You can change your selection until you click Submit.</p>';
+    holder.innerHTML = html;
+
+    QUESTIONS.forEach(function (q) {
+      $$('input[name="rct-' + q.id + '"]').forEach(function (input) {
+        input.addEventListener('change', function () {
+          onAnswerChange(q.id, input.value === 'true');
+        });
+      });
+      var v = log.answers[q.id];
+      if (v === true || v === false) {
+        var sel = $('input[name="rct-' + q.id + '"][value="' + (v ? 'true' : 'false') + '"]');
+        if (sel) sel.checked = true;
+      }
+    });
+    $('#rct-submit-final').addEventListener('click', onSubmitFinal);
+    refreshSubmitState();
+  }
+
+  function allAnswered() {
+    return QUESTIONS.every(function (q) {
+      return log.answers[q.id] === true || log.answers[q.id] === false;
+    });
+  }
+
+  function refreshSubmitState() {
+    var btn = $('#rct-submit-final');
+    if (btn) btn.disabled = !allAnswered() || isFinalised();
+  }
+
+  function isFinalised() {
+    return log.events.some(function (e) { return e.type === 'answer_final'; });
+  }
+
+  function onAnswerChange(qid, value) {
+    if (isFinalised()) return;
+    log.answers[qid] = value;
+    logEvent({ type: 'answer_change', question_id: qid, value: value });
+    persist();
+    refreshSubmitState();
+  }
+
+  function onSubmitFinal() {
+    if (!allAnswered() || isFinalised()) return;
+    QUESTIONS.forEach(function (q) {
+      logEvent({ type: 'answer_final', question_id: q.id, value: log.answers[q.id] });
+    });
+    lockPanel();
+    persist();
+    postToParent({ type: 'rct_complete' });
+    var btn = $('#rct-submit-final');
+    if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
+    $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
+    var hint = $('.rct-submit-hint');
+    if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+    postHeight();
+  }
+
+  function lockPanel() {
+    if (!log.events.some(function (e) { return e.type === 'panel_locked'; })) {
+      logEvent({ type: 'panel_locked' });
+    }
+    var rp = $('.rct-right');
+    if (rp) rp.classList.add('is-locked');
+    ['#rct-chat-input', '#rct-chat-send', '#rct-search-input', '#rct-search-button'].forEach(function (sel) {
+      var el = $(sel); if (el) el.disabled = true;
+    });
+  }
+
+  /* ==================================================================
+   * LLM chat (multi-turn via OpenRouter)
+   * ================================================================== */
+  function wireChat() {
+    var form = $('#rct-chat-form');
+    var input = $('#rct-chat-input');
+    if (!form || !input) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      sendChat(text);
+    });
+  }
+
+  function replayChat() {
+    var logEl = $('#rct-chat-log');
+    if (!logEl) return;
+    logEl.innerHTML = '';
+    log.events.forEach(function (e) {
+      if (e.type === 'prompt') appendBubble('user', e.content);
+      else if (e.type === 'response') appendBubble('assistant', e.content);
+      else if (e.type === 'error' && e.error) appendBubble('error', 'Error: ' + e.error);
+    });
+  }
+
+  function appendBubble(role, content) {
+    var logEl = $('#rct-chat-log');
+    if (!logEl) return;
+    var div = document.createElement('div');
+    div.className = 'rct-chat-bubble rct-chat-' + role;
+    div.textContent = content;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+    postHeight();
+  }
+
+  function setChatBusy(busy) {
+    var input = $('#rct-chat-input');
+    var btn = $('#rct-chat-send');
+    if (input) input.disabled = busy || isFinalised();
+    if (btn)   btn.disabled   = busy || isFinalised();
+    var typing = $('#rct-chat-typing');
+    if (typing) typing.style.display = busy ? '' : 'none';
+  }
+
+  function sendChat(userInput) {
+    if (isFinalised()) return;
+    logEvent({ type: 'prompt', content: userInput });
+    appendBubble('user', userInput);
+    persist();
+
+    var messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+    log.events.forEach(function (e) {
+      if (e.type === 'prompt') messages.push({ role: 'user', content: e.content });
+      else if (e.type === 'response') messages.push({ role: 'assistant', content: e.content });
+    });
+
+    setChatBusy(true);
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+
+    fetch(OPENROUTER_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + OPENROUTER_API_KEY,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': OPENROUTER_REFERER,
+        'X-Title': OPENROUTER_TITLE
+      },
+      body: JSON.stringify({ model: MODEL, messages: messages })
+    })
+      .then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
+      .then(function (out) {
+        var latency = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
+        if (!out.res.ok || !out.data || !out.data.choices || !out.data.choices[0]) {
+          var msg = (out.data && out.data.error && out.data.error.message) || ('HTTP ' + out.res.status);
+          logEvent({ type: 'error', error: msg, http_status: out.res.status, latency_ms: latency });
+          appendBubble('error', 'Could not reach the assistant: ' + msg);
+        } else {
+          var reply = out.data.choices[0].message.content || '';
+          logEvent({ type: 'response', content: reply, latency_ms: latency, http_status: out.res.status });
+          log.prompt_count += 1;
+          appendBubble('assistant', reply);
+        }
+        setChatBusy(false);
+        persist();
+      })
+      .catch(function (err) {
+        var latency = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
+        logEvent({ type: 'error', error: String(err && err.message || err), latency_ms: latency });
+        appendBubble('error', 'Network error. The chart is still answerable on its own.');
+        setChatBusy(false);
+        persist();
+      });
+  }
+
+  /* ==================================================================
+   * Mocked Google search
+   * ================================================================== */
+  function wireSearch() {
+    var form = $('#rct-search-form');
+    var input = $('#rct-search-input');
+    if (!form || !input) return;
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var q = input.value.trim();
+      if (!q) return;
+      runSearch(q);
+    });
+  }
+
+  function replaySearch() {
+    var lastQuery = null, lastResults = null;
+    log.events.forEach(function (e) {
+      if (e.type === 'search_query') lastQuery = e.query;
+      if (e.type === 'search_results_shown') lastResults = e.results;
+    });
+    var input = $('#rct-search-input');
+    if (input && lastQuery) input.value = lastQuery;
+    if (lastResults) renderSearchResults(lastResults, lastQuery);
+  }
+
+  function setSearchBusy(busy) {
+    var input = $('#rct-search-input');
+    var btn = $('#rct-search-button');
+    if (input) input.disabled = busy || isFinalised();
+    if (btn)   btn.disabled   = busy || isFinalised();
+    var spinner = $('#rct-search-spinner');
+    if (spinner) spinner.style.display = busy ? '' : 'none';
+  }
+
+  function runSearch(query) {
+    if (isFinalised()) return;
+    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    logEvent({ type: 'search_query', query: query });
+    persist();
+    setSearchBusy(true);
+    var delay = Math.floor(SEARCH_LATENCY_MIN_MS + Math.random() * (SEARCH_LATENCY_MAX_MS - SEARCH_LATENCY_MIN_MS));
+    setTimeout(function () {
+      var latency = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
+      logEvent({ type: 'search_results_shown', query: query, results: SEARCH_RESULTS, latency_ms: latency });
+      log.prompt_count += 1;
+      renderSearchResults(SEARCH_RESULTS, query);
+      setSearchBusy(false);
+      persist();
+    }, delay);
+  }
+
+  function renderSearchResults(results, query) {
+    var holder = $('#rct-search-results');
+    if (!holder) return;
+    var html = '';
+    if (query) html += '<p class="rct-search-meta">About ' + results.length + ' results for <strong>' + esc(query) + '</strong></p>';
+    results.forEach(function (r) {
+      html += '<div class="rct-search-result">';
+      html += '<div class="rct-search-url">' + esc(r.url) + '</div>';
+      html += '<a class="rct-search-title" href="javascript:void(0)" tabindex="0">' + esc(r.title) + '</a>';
+      html += '<p class="rct-search-snippet">' + esc(r.snippet) + '</p>';
+      html += '</div>';
+    });
+    holder.innerHTML = html;
+    postHeight();
+  }
+
+  /* ==================================================================
+   * Boot
+   * ================================================================== */
+  buildDom();
+  renderChart();
+  renderQuestions();
+  if (CONDITION === 'LLM')   { wireChat();   replayChat();   }
+  if (CONDITION === 'SEARCH'){ wireSearch(); replaySearch(); }
+
+  if (isFinalised()) {
+    lockPanel();
+    var btn = $('#rct-submit-final');
+    if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
+    $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
+    var hint = $('.rct-submit-hint');
+    if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+    postToParent({ type: 'rct_complete' });
+  }
+
+  persist();
+  postHeight();
+  window.addEventListener('resize', postHeight);
+  // Some browsers compute scrollHeight before fonts/SVG settle.
+  setTimeout(postHeight, 250);
+  setTimeout(postHeight, 1000);
+
+  console.log('[RCT embed] init complete — condition=' + CONDITION + ', pid=' + PID);
+})();
+</script>
+</body>
+</html>

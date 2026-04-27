@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RCT Treatment Interface — Landing</title>
+<style>
+  body {
+    margin: 0; padding: 32px 16px;
+    font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+    background: #eceff1; color: #37474f;
+    min-height: 100vh;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .card {
+    background: #fff; border-radius: 4px; padding: 24px 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
+    margin-bottom: 16px;
+  }
+  h1 { margin: 0 0 8px 0; font-size: 22px; font-weight: 500; color: #263238; }
+  h2 { margin: 24px 0 8px 0; font-size: 14px; font-weight: 500; letter-spacing: 0.04em;
+       text-transform: uppercase; color: #455a64; }
+  p { margin: 0 0 12px 0; font-size: 14px; line-height: 1.55; }
+  a { color: #1565c0; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  ul { margin: 0; padding-left: 20px; }
+  li { margin-bottom: 8px; font-size: 14px; line-height: 1.55; }
+  code { background: #eceff1; padding: 1px 6px; border-radius: 3px; font-size: 13px; color: #263238; }
+  .note {
+    margin-top: 16px; padding: 12px 16px; background: #fff8e1; border-left: 3px solid #ffa000;
+    border-radius: 3px; font-size: 13px; color: #5d4037;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>RCT Treatment Interface</h1>
+    <p>Static deployment of the experimental UI used inside a Qualtrics survey.
+       The Qualtrics question loads <a href="embed.html?condition=LLM&pid=demo"><code>embed.html</code></a>
+       in an iframe — that is the only file participants see.</p>
+
+    <h2>Local simulators (developer tools)</h2>
+    <ul>
+      <li><a href="index-llm.html">index-llm.html</a> — Qualtrics-side simulator for the LLM condition. Embeds the iframe and mimics the postMessage bridge.</li>
+      <li><a href="index-search.html">index-search.html</a> — same, for the SEARCH condition.</li>
+    </ul>
+
+    <h2>Direct embed (what Qualtrics loads)</h2>
+    <ul>
+      <li><a href="embed.html?condition=LLM&pid=demo">embed.html?condition=LLM&pid=demo</a></li>
+      <li><a href="embed.html?condition=SEARCH&pid=demo">embed.html?condition=SEARCH&pid=demo</a></li>
+    </ul>
+
+    <div class="note">
+      For Qualtrics, paste an <code>&lt;iframe&gt;</code> into the question Question Text pointing at
+      <code>YOUR_DEPLOYED_URL/embed.html?condition=LLM&amp;pid=${e://Field/ResponseID}</code>,
+      and paste <code>qualtrics-question-js.js</code> into that question's JavaScript panel.
+      See the README for the full setup.
+    </div>
+  </div>
+</div>
+</body>
+</html>
