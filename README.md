@@ -22,6 +22,7 @@ The two are mutually exclusive per question. The iframe section below is the ori
 | `qualtrics-search.html` | One-line `<iframe>` snippet to paste into the SEARCH-branch question. |
 | `qualtrics-question-js.js` | Qualtrics-side bridge — paste into both questions' JS panels. Listens for postMessage from the iframe and writes to Embedded Data, shows the Next button, and resizes the iframe. |
 | `index-llm.html`, `index-search.html` | Local "Qualtrics simulator" pages. Iframe-embed `embed.html`, mimic the postMessage bridge so you can test exactly the production flow without deploying. |
+| `worker.js` | Cloudflare Worker that holds the OpenRouter API key as a server-side secret and proxies chat requests. **Deploy this so the key never ships in `embed.html`.** See [Backend proxy setup](#backend-proxy-setup-cloudflare-worker) below. |
 | `README.md` | This file. |
 
 ## Communication contract (iframe → parent)
@@ -186,6 +187,70 @@ Different instructions per condition? Move `INSTRUCTIONS_HTML` below the `CONDIT
 ```
 
 For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results are static (same 4 entries returned regardless of query) but the actual query string is logged.
+
+## Backend proxy setup (Cloudflare Worker)
+
+The OpenRouter API key must NOT live in `embed.html` once that file is deployed publicly — anyone can read it from page source and rack up your bill. The proxy in [worker.js](worker.js) fixes this: it sits between `embed.html` and OpenRouter, holding the key as a server-side secret.
+
+### One-time setup (~5 minutes)
+
+1. **Create a Cloudflare account** at [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up). Free tier is fine.
+2. **Workers & Pages → Create → Create Worker.** Name it e.g. `thesis-llm-proxy`. Click **Deploy** (the placeholder code is fine for now).
+3. **Edit code** → paste the **entire contents of [worker.js](worker.js)** into the editor (replace what's there). Click **Save and deploy**.
+4. **Settings → Variables and Secrets:**
+   - Add **`OPENROUTER_API_KEY`** as **Type: Secret** → paste your real OpenRouter key (the one you tested with curl) → **Save**.
+   - Add **`ALLOWED_ORIGINS`** as **Type: Text** → set to your GitHub Pages origin and Qualtrics origin, comma-separated:
+     ```
+     https://bruno20033.github.io,https://oii.eu.qualtrics.com
+     ```
+     (add other Qualtrics datacentres if you publish from a different one — `*.qualtrics.com` is locked down per-tenant)
+   - Optional: `MAX_TOKENS=1024` (default), `HTTP_REFERER=https://bruno20033.github.io/thesis-rct`, `X_TITLE=RCT Chart Study`.
+5. **Note your worker URL** — at the top of the worker page, e.g. `https://thesis-llm-proxy.bruno20033.workers.dev`.
+
+### Test the proxy
+
+```bash
+curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev \
+  -H "Origin: https://bruno20033.github.io" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"openai/gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}'
+```
+
+Expect a normal OpenRouter chat completion back. Responses with `403 Forbidden origin` mean `ALLOWED_ORIGINS` didn't match — fix the env var.
+
+### Wire `embed.html` to the proxy
+
+In [embed.html](embed.html), set:
+
+```js
+var PROXY_URL = 'https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev';
+```
+
+(`OPENROUTER_API_KEY` and `OPENROUTER_URL` are no longer needed — the proxy adds the auth header server-side.) Commit and push:
+
+```bash
+git add embed.html
+git commit -m "route llm calls through cloudflare proxy"
+git push
+```
+
+### Revoke the leaked key
+
+The key currently in your repo's git history (commit `b0ceff5` and similar) is permanently exposed. After confirming the proxy works:
+
+1. Go to [openrouter.ai/keys](https://openrouter.ai/keys) → revoke the old key.
+2. Create a new key, paste it into the **Cloudflare Worker secret** (NOT into embed.html ever again).
+
+The worker now holds the key; no further key handling is needed in your repo.
+
+### What the proxy enforces
+
+- **Origin allowlist** — rejects requests not from your GitHub Pages or Qualtrics origin (stops random scrapers from using your URL).
+- **Method allowlist** — POST only.
+- **`max_tokens` cap** — clamps to `MAX_TOKENS` env var (default 1024) so a runaway request can't burn 100k tokens.
+- **CORS headers** — set per-origin so `embed.html` can call from `https://bruno20033.github.io`.
+
+For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key.
 
 ## Refresh resilience
 
