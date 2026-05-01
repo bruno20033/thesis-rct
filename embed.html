@@ -181,19 +181,12 @@
    * CONFIGURATION — edit before deploying
    * ================================================================== */
 
-  // OpenRouter API key handling. Anything shipped to the participant's
-  // browser is extractable. Choose ONE option:
-  //   (a) RECOMMENDED: backend proxy. Replace OPENROUTER_URL with your
-  //       proxy and drop the Authorization header from the fetch call.
-  //   (b) Per-session ephemeral key passed via URL parameter.
-  //   (c) Hardcoded for IRB-supervised pilots only, with a spend cap on
-  //       the OpenRouter key, weekly rotation, and methods-section
-  //       documentation. The placeholder below assumes (c).
-  var OPENROUTER_API_KEY = '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';
-  var OPENROUTER_URL     = 'https://openrouter.ai/api/v1/chat/completions';
-  var OPENROUTER_REFERER = 'https://your-institution.example/thesis-rct';
-  var OPENROUTER_TITLE   = 'RCT Chart Study';
-  var DEFAULT_MODEL      = 'openai/gpt-4o-mini';
+  // The chat goes through a Cloudflare Worker proxy that holds the real
+  // OpenRouter key as a server-side secret. The participant's browser
+  // never sees the key. Set PROXY_URL to your deployed Worker URL.
+  // See worker.js + the README's "Backend proxy setup" section.
+  var PROXY_URL     = 'https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev';
+  var DEFAULT_MODEL = 'openai/gpt-4o-mini';
 
   var SYSTEM_PROMPT =
     'You are an assistant helping a participant interpret a chart of company performance. ' +
@@ -565,14 +558,9 @@
     setChatBusy(true);
     var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
 
-    fetch(OPENROUTER_URL, {
+    fetch(PROXY_URL, {
       method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + OPENROUTER_API_KEY,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': OPENROUTER_REFERER,
-        'X-Title': OPENROUTER_TITLE
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model: MODEL, messages: messages })
     })
       .then(function (res) { return res.json().then(function (data) { return { res: res, data: data }; }); })
