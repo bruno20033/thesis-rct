@@ -289,7 +289,8 @@
       model_used: CONDITION === 'LLM' ? MODEL : null,
       started_at: isoNow(),
       events: [],
-      prompt_count: 0,
+      prompt_count: 0,      // user prompts SENT (LLM messages or SEARCH queries)
+      response_count: 0,    // assistant replies / search-results-shown (successful only)
       answers: initialAnswers
     };
   }
@@ -549,6 +550,7 @@
   function sendChat(userInput) {
     if (isFinalised()) return;
     logEvent({ type: 'prompt', content: userInput });
+    log.prompt_count += 1;            // count user prompts SENT, regardless of API outcome
     appendBubble('user', userInput);
     persist();
 
@@ -576,7 +578,7 @@
         } else {
           var reply = out.data.choices[0].message.content || '';
           logEvent({ type: 'response', content: reply, latency_ms: latency, http_status: out.res.status });
-          log.prompt_count += 1;
+          log.response_count = (log.response_count || 0) + 1;
           appendBubble('assistant', reply);
         }
         setChatBusy(false);
@@ -630,13 +632,14 @@
     if (isFinalised()) return;
     var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
     logEvent({ type: 'search_query', query: query });
+    log.prompt_count += 1;             // count queries SENT, regardless of outcome
     persist();
     setSearchBusy(true);
     var delay = Math.floor(SEARCH_LATENCY_MIN_MS + Math.random() * (SEARCH_LATENCY_MAX_MS - SEARCH_LATENCY_MIN_MS));
     setTimeout(function () {
       var latency = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
       logEvent({ type: 'search_results_shown', query: query, results: SEARCH_RESULTS, latency_ms: latency });
-      log.prompt_count += 1;
+      log.response_count = (log.response_count || 0) + 1;
       renderSearchResults(SEARCH_RESULTS, query);
       setSearchBusy(false);
       persist();
