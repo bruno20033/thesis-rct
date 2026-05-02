@@ -94,9 +94,23 @@ participant_id
 session_id
 model_used
 prompt_count
+response_count
 InteractionLog
 q1_answer
+last_prompt
+last_response
+last_search_query
+all_prompts
+all_responses
+all_search_queries
+prompt_1 prompt_2 prompt_3 ... prompt_20
+response_1 response_2 response_3 ... response_20
+search_query_1 search_query_2 ... search_query_20
 ```
+
+The `prompt_N` / `response_N` / `search_query_N` fields capture each turn separately so analysts can read prompts and AI replies directly from the CSV. Up to 20 turns are written; if a participant has fewer, the remaining fields stay empty. The full conversation is also concatenated into `all_prompts`, `all_responses`, and `all_search_queries` (separated by `\n---\n`). The complete event log with timestamps and latencies remains in `InteractionLog` (stringified JSON) for full-fidelity analysis.
+
+`prompt_count` counts user prompts SENT (regardless of whether the AI replied successfully). `response_count` counts successful AI replies / search results shown.
 
 Add a **Randomizer** that evenly assigns each participant to one of two branches:
 - Branch A — sets `condition = LLM`, then shows the LLM question.

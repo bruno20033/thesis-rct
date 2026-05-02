@@ -41,7 +41,8 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('condition',       log.condition || '');
         Q.setEmbeddedData('participant_id',  log.participant_id || '');
         Q.setEmbeddedData('model_used',      log.model_used || '');
-        Q.setEmbeddedData('prompt_count',    String(log.prompt_count || 0));
+        Q.setEmbeddedData('prompt_count',    String(log.prompt_count   || 0));
+        Q.setEmbeddedData('response_count',  String(log.response_count || 0));
         Q.setEmbeddedData('session_id',      log.session_id || '');
         if (log.answers) {
           Object.keys(log.answers).forEach(function (qid) {
@@ -49,6 +50,48 @@ Qualtrics.SurveyEngine.addOnReady(function () {
             Q.setEmbeddedData(qid + '_answer', v === null || v === undefined ? '' : String(v));
           });
         }
+
+        // -------------------------------------------------------------
+        // Flatten prompts and responses into per-turn fields and a
+        // concatenated transcript so analysts can read them straight
+        // from the Qualtrics CSV without parsing InteractionLog JSON.
+        //
+        // Per-turn fields are written for up to MAX_TURNS conversation
+        // turns. Declare prompt_1..prompt_N and response_1..response_N
+        // (and search_query_1..search_query_N) in Survey Flow's
+        // Embedded Data so they appear as CSV columns.
+        // -------------------------------------------------------------
+        var MAX_TURNS = 20;
+        var prompts = [];
+        var responses = [];
+        var queries = [];
+        var events = log.events || [];
+        for (var i = 0; i < events.length; i++) {
+          var ev = events[i];
+          if (ev.type === 'prompt'               && ev.content) prompts.push(ev.content);
+          else if (ev.type === 'response'        && ev.content) responses.push(ev.content);
+          else if (ev.type === 'search_query'    && ev.query)   queries.push(ev.query);
+        }
+
+        // Per-turn fields — overwrite each one, and clear any that no
+        // longer have content (in case the participant deleted history).
+        for (var k = 1; k <= MAX_TURNS; k++) {
+          Q.setEmbeddedData('prompt_'        + k, prompts[k-1]   || '');
+          Q.setEmbeddedData('response_'      + k, responses[k-1] || '');
+          Q.setEmbeddedData('search_query_'  + k, queries[k-1]   || '');
+        }
+
+        // Last-turn convenience fields.
+        Q.setEmbeddedData('last_prompt',        prompts[prompts.length - 1]     || '');
+        Q.setEmbeddedData('last_response',      responses[responses.length - 1] || '');
+        Q.setEmbeddedData('last_search_query',  queries[queries.length - 1]     || '');
+
+        // Full transcripts (concatenated). Useful for a quick eyeball.
+        // Note: each Qualtrics Embedded Data field has a ~20 KB limit;
+        // for very long studies the per-turn fields above are safer.
+        Q.setEmbeddedData('all_prompts',        prompts.join('\n---\n'));
+        Q.setEmbeddedData('all_responses',      responses.join('\n---\n'));
+        Q.setEmbeddedData('all_search_queries', queries.join('\n---\n'));
       } catch (e) {
         console.warn('[RCT bridge] setEmbeddedData failed:', e);
       }
