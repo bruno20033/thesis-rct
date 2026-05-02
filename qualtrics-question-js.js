@@ -59,13 +59,16 @@ Qualtrics.SurveyEngine.addOnReady(function () {
     }
 
     if (data.type === 'rct_height' && typeof data.value === 'number') {
-      // Find the iframe inside this question and resize it.
+      // Clamp to a sane range to prevent any feedback-loop growth.
+      // 600px floor leaves room for the chart + question + treatment;
+      // 1800px ceiling is plenty for desktop, with internal scroll for
+      // long chat / search histories handling overflow naturally.
+      var h = Math.max(600, Math.min(1800, data.value + 16));
       var iframes = qThis.questionContainer
         ? qThis.questionContainer.getElementsByTagName('iframe')
         : document.querySelectorAll('.QuestionBody iframe');
       for (var i = 0; i < iframes.length; i++) {
-        // Add a small buffer so scrollbars don't appear.
-        iframes[i].style.height = (data.value + 16) + 'px';
+        iframes[i].style.height = h + 'px';
       }
     }
   }
