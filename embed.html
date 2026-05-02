@@ -38,12 +38,15 @@
   body {
     font-family: 'Roboto', 'Helvetica Neue', Arial, sans-serif;
     color: #37474f; background: #fafafa;
-    min-height: 100vh;
+    /* No 100vh — when the parent iframe auto-resizes to fit our content,
+       a vh-based min-height creates a feedback loop where each resize
+       grows 100vh, which grows scrollHeight, which posts a larger height,
+       which grows the iframe, etc. Use a fixed minimum instead. */
   }
 
   .rct-root {
     display: flex; flex-direction: column; gap: 16px;
-    padding: 16px; min-height: 100vh;
+    padding: 16px;
   }
 
   .rct-instructions {
@@ -677,7 +680,11 @@
 
   persist();
   postHeight();
-  window.addEventListener('resize', postHeight);
+  // Do NOT listen for window resize — when the Qualtrics parent
+  // resizes the iframe to fit our content, the iframe's window fires
+  // a resize event, which would trigger postHeight again and create
+  // an infinite growth feedback loop. Initial delayed posts below are
+  // enough; further posts happen explicitly after each interaction.
   // Some browsers compute scrollHeight before fonts/SVG settle.
   setTimeout(postHeight, 250);
   setTimeout(postHeight, 1000);
