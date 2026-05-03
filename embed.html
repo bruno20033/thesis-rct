@@ -60,12 +60,17 @@
   }
   .rct-instructions-body { margin: 0; font-size: 15px; line-height: 1.5; color: #263238; }
 
-  .rct-panes { display: flex; gap: 16px; min-height: 560px; }
+  /* Always side-by-side: chart+question on the left, treatment on the right.
+     If the iframe is narrower than ~700px the row scrolls horizontally rather
+     than collapsing — the participant will rarely see this in Qualtrics
+     (questions are usually wider) but it's the safer fallback. */
+  .rct-panes { display: flex; gap: 16px; min-height: 560px; overflow-x: auto; }
   .rct-pane {
-    flex: 1 1 50%; display: flex; flex-direction: column;
+    flex: 1 1 50%; min-width: 320px;
+    display: flex; flex-direction: column;
     background: #fff; border-radius: 4px;
     box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
-    overflow: hidden; min-width: 0;
+    overflow: hidden;
   }
   .rct-pane-header {
     padding: 12px 16px; border-bottom: 1px solid #eceff1;
@@ -166,11 +171,6 @@
   .rct-fatal p { margin: 0 0 8px 0; font-size: 14px; line-height: 1.5; }
   .rct-fatal code { background: #eceff1; padding: 2px 6px; border-radius: 3px; font-size: 12px; }
 
-  /* Stack panes vertically below 900px (e.g. mobile, narrow Qualtrics) */
-  @media (max-width: 900px) {
-    .rct-panes { flex-direction: column; min-height: auto; }
-    .rct-pane { flex: 0 0 auto; min-height: 360px; }
-  }
 </style>
 </head>
 <body>
