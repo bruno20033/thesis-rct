@@ -89,23 +89,40 @@ Whichever you pick, **note the URL of `embed.html`**. You'll paste it into the i
 Add an **Embedded Data** element at the top with these field names (leave values blank — the bridge fills them):
 
 ```
+# core identification
 condition
 participant_id
 session_id
 model_used
+InteractionLog
+
+# task answer
+q1_answer
+
+# LLM-condition counters and content
 prompt_count
 response_count
-InteractionLog
-q1_answer
 last_prompt
 last_response
-last_search_query
 all_prompts
 all_responses
-all_search_queries
 prompt_1 prompt_2 prompt_3 ... prompt_20
 response_1 response_2 response_3 ... response_20
+
+# SEARCH-condition counters and content
+query_count
+click_count
+total_clicks
+total_dwell_ms
+last_search_query
+all_search_queries
+all_clicked_urls
 search_query_1 search_query_2 ... search_query_20
+search_click_1 search_click_2 ... search_click_20
+search_click_title_1 ... search_click_title_20
+search_click_query_1 ... search_click_query_20
+search_click_index_1 ... search_click_index_20
+search_dwell_ms_1 ... search_dwell_ms_20
 ```
 
 The `prompt_N` / `response_N` / `search_query_N` fields capture each turn separately so analysts can read prompts and AI replies directly from the CSV. Up to 20 turns are written; if a participant has fewer, the remaining fields stay empty. The full conversation is also concatenated into `all_prompts`, `all_responses`, and `all_search_queries` (separated by `\n---\n`). The complete event log with timestamps and latencies remains in `InteractionLog` (stringified JSON) for full-fidelity analysis.
@@ -200,7 +217,20 @@ Different instructions per condition? Move `INSTRUCTIONS_HTML` below the `CONDIT
 }
 ```
 
-For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results are static (same 4 entries returned regardless of query) but the actual query string is logged.
+For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from a real Google Programmable Search (Custom Search JSON API) proxied through the same Cloudflare Worker; clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *Google Custom Search Engine setup* below.
+
+### SEARCH event types
+
+| Event | Fields | When |
+|---|---|---|
+| `search_query` | `query` | Submitted before the API call (so failed searches are still recorded). |
+| `search_results_shown` | `query, results[], latency_ms` | After a successful API response. `results` is `[{title, url, displayUrl, snippet}]`. |
+| `result_click` | `index, url, title, query` | Logged synchronously, **before** navigation, so a torn-down page doesn't lose the click. |
+| `result_dwell` | `url, dwell_ms, returned_via` | Computed on `pageshow` when the participant returns. `returned_via` is `"bfcache"` (instant restore) or `"reload"`. Sub-100 ms and 30 min+ values are filtered as noise. |
+| `error_retry` | `attempt, error` | Each transient failure during the silent-retry loop (max 2 retries). |
+| `error` | `error, http_status, latency_ms` | Logged once after all retries are exhausted; the inline error card is shown. |
+
+The bridge's flat-field flattener writes per-turn fields (`search_click_1..20`, `search_click_title_1..20`, `search_click_query_1..20`, `search_click_index_1..20`, `search_dwell_ms_1..20`) plus aggregates `total_clicks`, `total_dwell_ms`, `query_count`, `click_count`, `all_clicked_urls` so analysts get the data without parsing `InteractionLog` JSON.
 
 ## Backend proxy setup (Cloudflare Worker)
 
@@ -259,12 +289,59 @@ The worker now holds the key; no further key handling is needed in your repo.
 
 ### What the proxy enforces
 
-- **Origin allowlist** — rejects requests not from your GitHub Pages or Qualtrics origin (stops random scrapers from using your URL).
-- **Method allowlist** — POST only.
-- **`max_tokens` cap** — clamps to `MAX_TOKENS` env var (default 1024) so a runaway request can't burn 100k tokens.
-- **CORS headers** — set per-origin so `embed.html` can call from `https://bruno20033.github.io`.
+The Worker exposes two routes under one origin-locked CORS policy:
 
-For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key.
+- **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY`. `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
+- **`POST /search`** — forward to Google Programmable Search with the secret `GOOGLE_CSE_API_KEY` and the public-but-env-var `GOOGLE_CSE_ID`. Returns up to 10 `{title, url, displayUrl, snippet}` items.
+
+Cross-cutting:
+- **Origin allowlist** — every request is checked against `ALLOWED_ORIGINS`. Off-list requests get `403 Forbidden origin`.
+- **Method allowlist** — POST only (plus OPTIONS for CORS pre-flight).
+- **CORS headers** — `Access-Control-Allow-Origin` is set to the matching allowed origin (per-request), not `*`.
+
+For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key + a daily query cap on the Google CSE.
+
+## Google Custom Search Engine setup (~10 minutes, one time)
+
+The SEARCH condition needs a Google API key and a Programmable Search Engine id (`cx`). Both go into the Cloudflare Worker as env vars; nothing ships in `embed.html`.
+
+### Step 1 — create the search engine
+
+1. Go to [programmablesearchengine.google.com](https://programmablesearchengine.google.com/) and click **Add**.
+2. Name it (e.g. `thesis-rct`). Under **What to search**, choose **Search the entire web** (toggle on after creating; new engines default to specific sites).
+3. Click **Create**. On the next page, copy the **Search engine ID** (starts like `017576662512468239146:` or is a base64-ish string in newer accounts). This is your `cx`.
+
+### Step 2 — get the API key
+
+1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and pick (or create) a project.
+2. **APIs & Services → Library** → search for **Custom Search API** → click → **Enable**.
+3. **APIs & Services → Credentials → Create Credentials → API key**. Copy the key.
+4. *(Recommended)* Click the key → **Edit** → **Application restrictions: HTTP referrers** is fine, but for Workers (which call from a Cloudflare IP) leave unrestricted **and** set **API restrictions: Custom Search API only**. Save.
+
+### Step 3 — wire the worker
+
+In Workers & Pages → your worker → **Settings → Variables and Secrets**:
+
+- `GOOGLE_CSE_API_KEY` (Type: **Secret**) → the Google API key.
+- `GOOGLE_CSE_ID` (Type: **Text**) → the `cx`.
+- `SEARCH_NUM_RESULTS` (Type: **Text**, optional) → `1`–`10`, default 10.
+
+Save. Your worker is now ready to serve `POST /search`.
+
+### Step 4 — test the new route
+
+```bash
+curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
+  -H "Origin: https://bruno20033.github.io" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"acme corp profitable"}'
+```
+
+Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}`. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `500` mentioning `GOOGLE_CSE_API_KEY` means the secrets aren't set.
+
+### Quota
+
+Google's free tier is **100 queries/day** per project. Beyond that, $5 per 1,000 queries (capped at 10k/day). For a 200-participant pilot at ~5 queries each = 1,000 queries → $5 if not spread over 10 days. Set a daily cap in **APIs & Services → Custom Search API → Quotas** to avoid surprises.
 
 ## Refresh resilience
 
@@ -311,6 +388,7 @@ Use this path when you don't have a public URL to host `embed.html` on. The two 
 | Hosting | Static URL (`embed.html`) + Qualtrics paste | Everything inside Qualtrics |
 | Chart | Hand-rolled SVG | [Chart.js](https://www.chartjs.org/) via CDN |
 | LLM | Single round-trip (non-streaming) | **Streaming** (OpenRouter SSE) |
+| **SEARCH** | **Real Google Programmable Search** via Worker `/search` route + click + dwell tracking | **Still mocked** (4 hardcoded results); click event logged but no navigation |
 | Question types | True/False only | True/False, MC (single), MC (multi), Likert |
 | Embedded Data field | `InteractionLog` (one) | `LLM_Log` and `Search_Log` (per condition) |
 | Layout | `min-height: 560px` (page grows) | `height: 600px` with internal scroll per panel |

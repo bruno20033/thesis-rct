@@ -62,23 +62,34 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         // Embedded Data so they appear as CSV columns.
         // -------------------------------------------------------------
         var MAX_TURNS = 20;
-        var prompts = [];
+        var prompts   = [];
         var responses = [];
-        var queries = [];
+        var queries   = [];
+        var clicks    = [];   // result_click events    (SEARCH condition)
+        var dwells    = [];   // result_dwell events    (SEARCH condition)
         var events = log.events || [];
         for (var i = 0; i < events.length; i++) {
           var ev = events[i];
-          if (ev.type === 'prompt'               && ev.content) prompts.push(ev.content);
-          else if (ev.type === 'response'        && ev.content) responses.push(ev.content);
-          else if (ev.type === 'search_query'    && ev.query)   queries.push(ev.query);
+          if      (ev.type === 'prompt'               && ev.content) prompts.push(ev.content);
+          else if (ev.type === 'response'             && ev.content) responses.push(ev.content);
+          else if (ev.type === 'search_query'         && ev.query)   queries.push(ev.query);
+          else if (ev.type === 'result_click'         && ev.url)     clicks.push(ev);
+          else if (ev.type === 'result_dwell'         && ev.url)     dwells.push(ev);
         }
 
         // Per-turn fields — overwrite each one, and clear any that no
         // longer have content (in case the participant deleted history).
         for (var k = 1; k <= MAX_TURNS; k++) {
-          Q.setEmbeddedData('prompt_'        + k, prompts[k-1]   || '');
-          Q.setEmbeddedData('response_'      + k, responses[k-1] || '');
-          Q.setEmbeddedData('search_query_'  + k, queries[k-1]   || '');
+          var c = clicks[k-1];
+          var d = dwells[k-1];
+          Q.setEmbeddedData('prompt_'             + k, prompts[k-1]   || '');
+          Q.setEmbeddedData('response_'           + k, responses[k-1] || '');
+          Q.setEmbeddedData('search_query_'       + k, queries[k-1]   || '');
+          Q.setEmbeddedData('search_click_'       + k, c ? (c.url   || '') : '');
+          Q.setEmbeddedData('search_click_title_' + k, c ? (c.title || '') : '');
+          Q.setEmbeddedData('search_click_query_' + k, c ? (c.query || '') : '');
+          Q.setEmbeddedData('search_click_index_' + k, c ? String(c.index != null ? c.index : '') : '');
+          Q.setEmbeddedData('search_dwell_ms_'    + k, d && d.dwell_ms != null ? String(d.dwell_ms) : '');
         }
 
         // Last-turn convenience fields.
@@ -92,6 +103,14 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('all_prompts',        prompts.join('\n---\n'));
         Q.setEmbeddedData('all_responses',      responses.join('\n---\n'));
         Q.setEmbeddedData('all_search_queries', queries.join('\n---\n'));
+        Q.setEmbeddedData('all_clicked_urls',   clicks.map(function (x) { return x.url; }).join('\n'));
+
+        // Aggregates for the SEARCH condition.
+        var totalDwell = dwells.reduce(function (s, x) { return s + (x.dwell_ms || 0); }, 0);
+        Q.setEmbeddedData('total_clicks',   String(clicks.length));
+        Q.setEmbeddedData('total_dwell_ms', String(totalDwell));
+        Q.setEmbeddedData('query_count',    String(log.query_count || 0));
+        Q.setEmbeddedData('click_count',    String(log.click_count || 0));
       } catch (e) {
         console.warn('[RCT bridge] setEmbeddedData failed:', e);
       }
