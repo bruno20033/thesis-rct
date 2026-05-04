@@ -89,23 +89,40 @@ Whichever you pick, **note the URL of `embed.html`**. You'll paste it into the i
 Add an **Embedded Data** element at the top with these field names (leave values blank — the bridge fills them):
 
 ```
+# core identification
 condition
 participant_id
 session_id
 model_used
+InteractionLog
+
+# task answer
+q1_answer
+
+# LLM-condition counters and content
 prompt_count
 response_count
-InteractionLog
-q1_answer
 last_prompt
 last_response
-last_search_query
 all_prompts
 all_responses
-all_search_queries
 prompt_1 prompt_2 prompt_3 ... prompt_20
 response_1 response_2 response_3 ... response_20
+
+# SEARCH-condition counters and content
+query_count
+click_count
+total_clicks
+total_dwell_ms
+last_search_query
+all_search_queries
+all_clicked_urls
 search_query_1 search_query_2 ... search_query_20
+search_click_1 search_click_2 ... search_click_20
+search_click_title_1 ... search_click_title_20
+search_click_query_1 ... search_click_query_20
+search_click_index_1 ... search_click_index_20
+search_dwell_ms_1 ... search_dwell_ms_20
 ```
 
 The `prompt_N` / `response_N` / `search_query_N` fields capture each turn separately so analysts can read prompts and AI replies directly from the CSV. Up to 20 turns are written; if a participant has fewer, the remaining fields stay empty. The full conversation is also concatenated into `all_prompts`, `all_responses`, and `all_search_queries` (separated by `\n---\n`). The complete event log with timestamps and latencies remains in `InteractionLog` (stringified JSON) for full-fidelity analysis.
@@ -200,7 +217,20 @@ Different instructions per condition? Move `INSTRUCTIONS_HTML` below the `CONDIT
 }
 ```
 
-For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results are static (same 4 entries returned regardless of query) but the actual query string is logged.
+For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from **DuckDuckGo** scraped server-side by the same Cloudflare Worker (no API key required); clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *DuckDuckGo search backend* below.
+
+### SEARCH event types
+
+| Event | Fields | When |
+|---|---|---|
+| `search_query` | `query` | Submitted before the API call (so failed searches are still recorded). |
+| `search_results_shown` | `query, results[], latency_ms` | After a successful API response. `results` is `[{title, url, displayUrl, snippet}]`. |
+| `result_click` | `index, url, title, query` | Logged synchronously, **before** navigation, so a torn-down page doesn't lose the click. |
+| `result_dwell` | `url, dwell_ms, returned_via` | Computed on `pageshow` when the participant returns. `returned_via` is `"bfcache"` (instant restore) or `"reload"`. Sub-100 ms and 30 min+ values are filtered as noise. |
+| `error_retry` | `attempt, error` | Each transient failure during the silent-retry loop (max 2 retries). |
+| `error` | `error, http_status, latency_ms` | Logged once after all retries are exhausted; the inline error card is shown. |
+
+The bridge's flat-field flattener writes per-turn fields (`search_click_1..20`, `search_click_title_1..20`, `search_click_query_1..20`, `search_click_index_1..20`, `search_dwell_ms_1..20`) plus aggregates `total_clicks`, `total_dwell_ms`, `query_count`, `click_count`, `all_clicked_urls` so analysts get the data without parsing `InteractionLog` JSON.
 
 ## Backend proxy setup (Cloudflare Worker)
 
@@ -259,12 +289,60 @@ The worker now holds the key; no further key handling is needed in your repo.
 
 ### What the proxy enforces
 
-- **Origin allowlist** — rejects requests not from your GitHub Pages or Qualtrics origin (stops random scrapers from using your URL).
-- **Method allowlist** — POST only.
-- **`max_tokens` cap** — clamps to `MAX_TOKENS` env var (default 1024) so a runaway request can't burn 100k tokens.
-- **CORS headers** — set per-origin so `embed.html` can call from `https://bruno20033.github.io`.
+The Worker exposes two routes under one origin-locked CORS policy:
 
-For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key.
+- **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY`. `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
+- **`POST /search`** — server-side scrape of DuckDuckGo's HTML results page, parsed into JSON. **No API key, no signup, no quota cap.** Returns up to 30 `{title, url, displayUrl, snippet}` items. Sponsored ads are filtered out. (We tried Google Programmable Search first — Google removed "search the entire web" for new engines in 2024 — and Brave Search next — their free tier requires a billing card. DuckDuckGo's HTML page is the best card-free option.)
+
+Cross-cutting:
+- **Origin allowlist** — every request is checked against `ALLOWED_ORIGINS`. Off-list requests get `403 Forbidden origin`.
+- **Method allowlist** — POST only (plus OPTIONS for CORS pre-flight).
+- **CORS headers** — `Access-Control-Allow-Origin` is set to the matching allowed origin (per-request), not `*`.
+
+For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key. DuckDuckGo has no formal rate limit, but they do throttle aggressive automated traffic — for thesis-scale (a few hundred queries/day) this is a non-issue.
+
+## DuckDuckGo search backend (zero setup)
+
+The SEARCH condition's results come from **DuckDuckGo**, scraped server-side by the Cloudflare Worker. No API key, no signup, no card, no quota — DDG's HTML page is publicly accessible and they permit non-commercial use.
+
+> **Why DuckDuckGo?** We considered three alternatives. Google Programmable Search no longer allows "search the entire web" for new engines (since 2024). Brave Search's free tier requires a billing card on file. DuckDuckGo is the only option that lets a thesis pilot run end-to-end with zero per-query cost and no account friction. Visual presentation in `embed.html` (blue title link, green URL hostname, grey snippet) is identical regardless of backend.
+
+### What it does behind the scenes
+
+The Worker `POST /search` route:
+1. Takes a `{ query }` JSON body from the browser.
+2. POSTs `q=<query>&kl=<region>&kp=<safesearch>` to `html.duckduckgo.com/html/` with a normal browser User-Agent.
+3. Parses the HTML response, extracting up to N organic results.
+4. **Filters out sponsored ads** (results with `result--ad` / `result__sponsored` classes, or `duckduckgo.com/y.js` redirect URLs) so the experimental control isn't contaminated with paid placements.
+5. **Unwraps DuckDuckGo's redirect URLs** (`//duckduckgo.com/l/?uddg=…`) to the real destination, so the participant's click navigates straight to e.g. `wikipedia.org` and dwell time is measured against the actual site.
+6. Returns the same `{ items: [{title, url, displayUrl, snippet}], total }` shape the browser already expects.
+
+### Optional Worker env vars
+
+In Workers & Pages → your worker → **Settings → Variables and Secrets**:
+
+- `SEARCH_NUM_RESULTS` (Type: **Text**) → `1`–`30`, default 10.
+- `SEARCH_REGION` (Type: **Text**) → DuckDuckGo region code, default `wt-wt` (no region). Examples: `us-en`, `uk-en`, `de-de`. Affects result locale.
+- `SEARCH_SAFESEARCH` (Type: **Text**) → `off` | `moderate` | `strict`, default `moderate`.
+
+None of these are required — the defaults work out of the box.
+
+### Test the route
+
+```bash
+curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
+  -H "Origin: https://bruno20033.github.io" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"acme corp profitable"}'
+```
+
+Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}` with ~10 organic results. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `429 DuckDuckGo rate-limit/anomaly check` means DDG temporarily blocked the Worker — wait a minute and re-test.
+
+### Reliability notes
+
+- DDG's HTML structure (`result__a`, `result__snippet` class names) has been stable for years; the parser is also forgiving (a small markup tweak won't silently zero out results — the parser would simply return fewer entries and the UI would show what it got).
+- If DDG ever serves the "anomaly" page (their bot challenge), the Worker surfaces a `429` instead of returning empty results, so the embed's retry loop kicks in (2 retries with back-off, then a clean `error` event).
+- For thesis-scale (a few hundred queries/day) DDG won't throttle. If you ever need to scale to thousands of queries/day, switch the backend to Brave (with a billing card) or self-host SearXNG — the Worker code change is small (one upstream fetch).
 
 ## Refresh resilience
 
@@ -311,6 +389,7 @@ Use this path when you don't have a public URL to host `embed.html` on. The two 
 | Hosting | Static URL (`embed.html`) + Qualtrics paste | Everything inside Qualtrics |
 | Chart | Hand-rolled SVG | [Chart.js](https://www.chartjs.org/) via CDN |
 | LLM | Single round-trip (non-streaming) | **Streaming** (OpenRouter SSE) |
+| **SEARCH** | **Real DuckDuckGo** via Worker `/search` route + click + dwell tracking (no API key) | **Still mocked** (4 hardcoded results); click event logged but no navigation |
 | Question types | True/False only | True/False, MC (single), MC (multi), Likert |
 | Embedded Data field | `InteractionLog` (one) | `LLM_Log` and `Search_Log` (per condition) |
 | Layout | `min-height: 560px` (page grows) | `height: 600px` with internal scroll per panel |

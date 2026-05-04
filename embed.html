@@ -154,11 +154,23 @@
   #rct-search-input:disabled { background: #eceff1; cursor: not-allowed; }
   #rct-search-results { flex: 1 1 auto; overflow-y: auto; padding: 16px; background: #fff; }
   .rct-search-meta { margin: 0 0 16px 0; font-size: 12px; color: #78909c; }
-  .rct-search-result { margin-bottom: 20px; }
+  .rct-search-result {
+    margin-bottom: 18px; padding: 8px 10px; border-radius: 4px;
+    cursor: pointer; transition: background 100ms;
+  }
+  .rct-search-result:hover { background: #f7f9fa; }
+  .rct-search-result:hover .rct-search-title { text-decoration: underline; }
   .rct-search-url { font-size: 12px; color: #2e7d32; margin-bottom: 2px; }
-  .rct-search-title { display: block; font-size: 16px; color: #1a0dab; text-decoration: none; margin-bottom: 4px; cursor: default; }
-  .rct-search-title:hover { text-decoration: underline; }
+  .rct-search-title { display: block; font-size: 16px; color: #1a0dab; text-decoration: none; margin-bottom: 4px; }
   .rct-search-snippet { margin: 0; font-size: 13px; color: #4d5156; line-height: 1.45; }
+  .rct-search-error {
+    padding: 14px; background: #fff3e0; color: #bf360c;
+    border: 1px solid #ffcc80; border-radius: 4px; font-size: 13px;
+  }
+  /* When the participant has finalised their answer, the entire search
+     panel should be inert — including the result cards (whose click
+     handlers would otherwise still fire and navigate away). */
+  .rct-right.is-locked .rct-search-result { pointer-events: none; opacity: 0.6; }
   #rct-search-spinner { padding: 16px; font-size: 13px; color: #78909c; font-style: italic; }
 
   /* Setup error / fatal screens */
@@ -214,23 +226,14 @@
     ]
   };
 
-  var SEARCH_RESULTS = [
-    { title: 'Acme Corp Annual Report 2024 — Investor Relations',
-      url: 'investors.acmecorp.com/annual-report-2024',
-      snippet: 'Acme Corp reported full-year revenue of $73M, up 43% YoY. Operating income of $11.4M reflects continued margin expansion despite headwinds in the components segment.' },
-    { title: 'Acme Corp posts record Q4 — Reuters',
-      url: 'reuters.com/business/acme-corp-q4',
-      snippet: 'Net income climbed to $9.2M in fiscal 2024, the company’s third consecutive profitable year. Shares rose 4% in after-hours trading.' },
-    { title: 'Is Acme Corp a Buy? — Seeking Alpha',
-      url: 'seekingalpha.com/article/acme-corp-analysis',
-      snippet: 'Margins remain pressured by raw-material costs, but consistent revenue growth and positive operating cash flow suggest the underlying business is sound.' },
-    { title: 'Acme Corp — Wikipedia',
-      url: 'en.wikipedia.org/wiki/Acme_Corp',
-      snippet: 'American manufacturing company. As of 2024, the company employs ~1,200 people and trades on NASDAQ. Reported its first profitable year in 2022 after a multi-year turnaround.' }
-  ];
-
-  var SEARCH_LATENCY_MIN_MS = 400;
-  var SEARCH_LATENCY_MAX_MS = 800;
+  // SEARCH backend — Cloudflare Worker /search route, which proxies to
+  // Google Programmable Search (Custom Search JSON API). The CSE id and
+  // Google API key live as Worker secrets; the participant never sees
+  // them. See README "Backend proxy setup" for one-time CSE provisioning.
+  var SEARCH_PROXY_URL    = (typeof PROXY_URL === 'string' ? PROXY_URL : '').replace(/\/+$/, '') + '/search';
+  var SEARCH_MAX_RETRIES  = 2;            // 1 initial attempt + 2 retries = 3 total
+  var SEARCH_RETRY_DELAY  = 300;          // ms; multiplied by attempt number
+  var SEARCH_BACKOFF_MAX  = 1500;         // ms; cap per-attempt sleep
 
   /* ==================================================================
    * URL parameter parsing
@@ -244,6 +247,12 @@
   var CONDITION = (rawCondition === 'LLM' || rawCondition === 'SEARCH') ? rawCondition : null;
   var PID       = getParam('pid')   || ('local-' + Math.random().toString(36).slice(2, 10));
   var MODEL     = getParam('model') || DEFAULT_MODEL;
+
+  // Per-participant localStorage key holding click metadata while the
+  // user is away on the destination page. Read back on `pageshow` to
+  // compute dwell time. Scoped by PID + CONDITION so a refresh in the
+  // wrong condition can't pollute another participant's record.
+  var DWELL_RETURN_KEY = 'rct_pending_click_' + PID + '_' + CONDITION;
 
   var root = document.getElementById('rct-root');
 
@@ -289,8 +298,10 @@
       model_used: CONDITION === 'LLM' ? MODEL : null,
       started_at: isoNow(),
       events: [],
-      prompt_count: 0,      // user prompts SENT (LLM messages or SEARCH queries)
-      response_count: 0,    // assistant replies / search-results-shown (successful only)
+      prompt_count: 0,      // LLM prompts sent (chat condition)
+      response_count: 0,    // successful assistant replies / search-results-shown
+      query_count: 0,       // SEARCH queries sent (search condition)
+      click_count: 0,       // SEARCH result clicks
       answers: initialAnswers
     };
   }
@@ -304,6 +315,11 @@
       QUESTIONS.forEach(function (q) {
         if (!(q.id in parsed.answers)) parsed.answers[q.id] = null;
       });
+      // Backfill counters that may be missing on logs written by older versions.
+      if (typeof parsed.prompt_count   !== 'number') parsed.prompt_count   = 0;
+      if (typeof parsed.response_count !== 'number') parsed.response_count = 0;
+      if (typeof parsed.query_count    !== 'number') parsed.query_count    = 0;
+      if (typeof parsed.click_count    !== 'number') parsed.click_count    = 0;
       return parsed;
     } catch (e) {
       console.warn('[RCT] failed to load stored log:', e);
@@ -594,7 +610,18 @@
   }
 
   /* ==================================================================
-   * Mocked Google search
+   * Real web search via Cloudflare Worker → Google Programmable Search.
+   *
+   * Click flow: clicking a result card navigates the embed page (same
+   * window) to the destination URL after we (a) log a `result_click`
+   * event and (b) stash click metadata under DWELL_RETURN_KEY in
+   * localStorage. When the participant returns via the browser back
+   * button the `pageshow` listener (at the bottom of this script) reads
+   * back the stash, computes dwell_ms, and logs `result_dwell`.
+   *
+   * Failure: silent retry up to SEARCH_MAX_RETRIES, with `error_retry`
+   * events for each transient failure. On final failure a single
+   * `error` event is logged and an inline error card is shown.
    * ================================================================== */
   function wireSearch() {
     var form = $('#rct-search-form');
@@ -602,6 +629,7 @@
     if (!form || !input) return;
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      if (isFinalised()) return;
       var q = input.value.trim();
       if (!q) return;
       runSearch(q);
@@ -611,12 +639,12 @@
   function replaySearch() {
     var lastQuery = null, lastResults = null;
     log.events.forEach(function (e) {
-      if (e.type === 'search_query') lastQuery = e.query;
+      if (e.type === 'search_query')         lastQuery   = e.query;
       if (e.type === 'search_results_shown') lastResults = e.results;
     });
     var input = $('#rct-search-input');
     if (input && lastQuery) input.value = lastQuery;
-    if (lastResults) renderSearchResults(lastResults, lastQuery);
+    if (lastResults && lastResults.length) renderSearchResults(lastResults, lastQuery);
   }
 
   function setSearchBusy(busy) {
@@ -628,39 +656,156 @@
     if (spinner) spinner.style.display = busy ? '' : 'none';
   }
 
+  function nowMs() { return (window.performance && performance.now) ? performance.now() : Date.now(); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
   function runSearch(query) {
     if (isFinalised()) return;
-    var t0 = (window.performance && performance.now) ? performance.now() : Date.now();
+    var t0 = nowMs();
     logEvent({ type: 'search_query', query: query });
-    log.prompt_count += 1;             // count queries SENT, regardless of outcome
+    log.query_count = (log.query_count || 0) + 1;
     persist();
     setSearchBusy(true);
-    var delay = Math.floor(SEARCH_LATENCY_MIN_MS + Math.random() * (SEARCH_LATENCY_MAX_MS - SEARCH_LATENCY_MIN_MS));
-    setTimeout(function () {
-      var latency = Math.round(((window.performance && performance.now) ? performance.now() : Date.now()) - t0);
-      logEvent({ type: 'search_results_shown', query: query, results: SEARCH_RESULTS, latency_ms: latency });
-      log.response_count = (log.response_count || 0) + 1;
-      renderSearchResults(SEARCH_RESULTS, query);
+
+    (async function () {
+      var attempt = 0;
+      var results = null;
+      var lastErr = null;
+      var lastStatus = 0;
+
+      while (attempt <= SEARCH_MAX_RETRIES) {
+        try {
+          var res = await fetch(SEARCH_PROXY_URL, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ query: query })
+          });
+          var data = null;
+          try { data = await res.json(); } catch (e) { /* fall through to error */ }
+          if (!res.ok) {
+            lastStatus = res.status;
+            throw new Error((data && data.error) || ('HTTP ' + res.status));
+          }
+          results = (data && Array.isArray(data.items)) ? data.items : [];
+          break;
+        } catch (err) {
+          lastErr = err;
+          if (attempt < SEARCH_MAX_RETRIES) {
+            logEvent({ type: 'error_retry', attempt: attempt + 1, error: String(err && err.message || err) });
+            persist();
+            await sleep(Math.min(SEARCH_RETRY_DELAY * (attempt + 1), SEARCH_BACKOFF_MAX));
+          }
+          attempt += 1;
+        }
+      }
+
+      var latency = Math.round(nowMs() - t0);
+      if (results) {
+        logEvent({ type: 'search_results_shown', query: query, results: results, latency_ms: latency });
+        log.response_count = (log.response_count || 0) + 1;
+        renderSearchResults(results, query);
+      } else {
+        logEvent({
+          type: 'error',
+          error: String(lastErr && lastErr.message || lastErr || 'unknown'),
+          http_status: lastStatus,
+          latency_ms: latency
+        });
+        showSearchError('Search is temporarily unavailable. Please try again, or answer based on the chart alone.');
+      }
       setSearchBusy(false);
       persist();
-    }, delay);
+    })();
   }
 
   function renderSearchResults(results, query) {
     var holder = $('#rct-search-results');
     if (!holder) return;
-    var html = '';
-    if (query) html += '<p class="rct-search-meta">About ' + results.length + ' results for <strong>' + esc(query) + '</strong></p>';
-    results.forEach(function (r) {
-      html += '<div class="rct-search-result">';
-      html += '<div class="rct-search-url">' + esc(r.url) + '</div>';
-      html += '<a class="rct-search-title" href="javascript:void(0)" tabindex="0">' + esc(r.title) + '</a>';
-      html += '<p class="rct-search-snippet">' + esc(r.snippet) + '</p>';
-      html += '</div>';
+    if (!results.length) {
+      holder.innerHTML = '<p class="rct-search-meta">No results for <strong>' + esc(query) + '</strong>.</p>';
+      postHeight();
+      return;
+    }
+    var html = '<p class="rct-search-meta">' + results.length + ' results for <strong>' + esc(query) + '</strong></p>';
+    results.forEach(function (r, idx) {
+      html += '<div class="rct-search-result" data-idx="' + idx + '">' +
+                '<div class="rct-search-url">' + esc(r.displayUrl || r.url) + '</div>' +
+                '<a class="rct-search-title" href="' + esc(r.url) + '" rel="noopener noreferrer nofollow">' + esc(r.title) + '</a>' +
+                '<p class="rct-search-snippet">' + esc(r.snippet) + '</p>' +
+              '</div>';
     });
     holder.innerHTML = html;
+    attachResultClickHandlers(results, query);
     postHeight();
   }
+
+  function showSearchError(msg) {
+    var holder = $('#rct-search-results');
+    if (!holder) return;
+    holder.innerHTML = '<div class="rct-search-error">' + esc(msg) + '</div>';
+    postHeight();
+  }
+
+  function attachResultClickHandlers(results, query) {
+    $$('.rct-search-result').forEach(function (card) {
+      card.addEventListener('click', function (e) {
+        if (isFinalised()) { e.preventDefault(); return; }
+        var idx = Number(card.getAttribute('data-idx'));
+        var r = results[idx];
+        if (!r || !r.url) return;
+        // Log the click BEFORE navigation so we don't lose it if the
+        // browser tears down the page before flushing localStorage.
+        logEvent({
+          type:   'result_click',
+          index:  idx,
+          url:    r.url,
+          title:  r.title || '',
+          query:  query
+        });
+        log.click_count = (log.click_count || 0) + 1;
+        try {
+          localStorage.setItem(DWELL_RETURN_KEY, JSON.stringify({
+            index: idx, url: r.url, title: r.title || '', query: query, click_ts: Date.now()
+          }));
+        } catch (_) { /* private mode etc. — dwell will be missing for this click */ }
+        persist();
+        // Inner <a> handles its own navigation. If the click landed on
+        // padding instead of the <a>, navigate explicitly so the click
+        // target appears uniform regardless of where they clicked.
+        if (!e.target.closest('a.rct-search-title')) {
+          window.location.assign(r.url);
+        }
+      });
+    });
+  }
+
+  /* On return via browser-back, compute and log dwell. The `pageshow`
+   * event fires both for BFCache restores (`persisted=true`, embed
+   * memory state intact) and for full reloads (`persisted=false`,
+   * memory hydrated from localStorage). Both cases yield a valid dwell
+   * measurement; analysts can split on `returned_via` if needed. */
+  window.addEventListener('pageshow', function (e) {
+    var raw = null;
+    try { raw = localStorage.getItem(DWELL_RETURN_KEY); } catch (_) {}
+    if (!raw) return;
+    var click;
+    try { click = JSON.parse(raw); } catch (_) { return; }
+    var dwell = Date.now() - (click && click.click_ts ? click.click_ts : 0);
+    // Sanity bounds: drop sub-100ms (likely double-fire) and 30+ minutes
+    // (likely abandoned tab); the click stays in the log either way.
+    if (dwell >= 100 && dwell <= 30 * 60 * 1000) {
+      logEvent({
+        type:         'result_dwell',
+        url:          click.url,
+        dwell_ms:     dwell,
+        returned_via: e.persisted ? 'bfcache' : 'reload'
+      });
+      // Important: persist BEFORE clearing the localStorage key, so a
+      // refresh between these two lines doesn't drop both records.
+      persist();
+    }
+    try { localStorage.removeItem(DWELL_RETURN_KEY); } catch (_) {}
+  });
 
   /* ==================================================================
    * Boot
