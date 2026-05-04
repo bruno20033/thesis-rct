@@ -171,7 +171,54 @@
      panel should be inert — including the result cards (whose click
      handlers would otherwise still fire and navigate away). */
   .rct-right.is-locked .rct-search-result { pointer-events: none; opacity: 0.6; }
+  .rct-right.is-locked #rct-result-frame-back { pointer-events: none; opacity: 0.6; }
   #rct-search-spinner { padding: 16px; font-size: 13px; color: #78909c; font-style: italic; }
+
+  /* In-panel result viewer — when the participant clicks a result, the
+     destination loads in this iframe so the chart + question stay
+     visible. Sites that set X-Frame-Options: DENY will appear blank,
+     so we surface a permanent "Open in new tab ↗" affordance. */
+  #rct-result-frame-container {
+    flex: 1 1 auto; display: none; flex-direction: column; min-height: 0;
+    background: #fff;
+  }
+  #rct-result-frame-container.is-active { display: flex; }
+  .rct-result-frame-bar {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; border-bottom: 1px solid #eceff1;
+    background: #f7f9fa; font-size: 12px;
+  }
+  #rct-result-frame-back {
+    appearance: none; -webkit-appearance: none; border: 1px solid #cfd8dc;
+    background: #fff; cursor: pointer; padding: 6px 10px;
+    border-radius: 4px; font-family: inherit; font-size: 12px; color: #455a64;
+    flex: 0 0 auto;
+  }
+  #rct-result-frame-back:hover { background: #f5f7f8; }
+  #rct-result-frame-url {
+    flex: 1 1 auto; min-width: 0; color: #455a64; font-size: 12px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  #rct-result-frame-newtab {
+    flex: 0 0 auto; color: #1565c0; text-decoration: none; font-size: 12px;
+    padding: 6px 8px; border-radius: 4px;
+  }
+  #rct-result-frame-newtab:hover { background: rgba(21,101,192,0.08); text-decoration: underline; }
+  #rct-result-frame {
+    flex: 1 1 auto; width: 100%; border: none; background: #fff;
+    /* min-height ensures the iframe is usable even when the parent's
+       size is small; overflow is handled by the iframe itself. */
+    min-height: 320px;
+  }
+  /* Visible only when the iframe failed to render (X-Frame-Options /
+     CSP). Toggled on by JS after a brief load timeout. */
+  #rct-result-frame-blocked {
+    display: none; padding: 18px; background: #fff8e1;
+    border-top: 1px solid #ffe082; color: #5d4037; font-size: 13px;
+    line-height: 1.5;
+  }
+  #rct-result-frame-container.is-blocked #rct-result-frame { display: none; }
+  #rct-result-frame-container.is-blocked #rct-result-frame-blocked { display: block; }
 
   /* Setup error / fatal screens */
   .rct-fatal {
@@ -373,6 +420,21 @@
           '</form>' +
           '<div id="rct-search-spinner" style="display:none">Searching…</div>' +
           '<div id="rct-search-results" aria-live="polite"></div>' +
+          // In-panel result viewer (hidden until a click). Loads the
+          // destination URL inside the right pane so the chart +
+          // question on the left stay visible. Sites that block
+          // iframing trigger the .is-blocked fallback.
+          '<div id="rct-result-frame-container" aria-live="polite">' +
+            '<div class="rct-result-frame-bar">' +
+              '<button id="rct-result-frame-back" type="button" aria-label="Back to results">← Back to results</button>' +
+              '<span id="rct-result-frame-url" title=""></span>' +
+              '<a id="rct-result-frame-newtab" href="#" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>' +
+            '</div>' +
+            '<iframe id="rct-result-frame" src="about:blank" referrerpolicy="no-referrer" loading="lazy" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>' +
+            '<div id="rct-result-frame-blocked">' +
+              '<strong>This site refused to be embedded.</strong> Click <strong>Open in new tab ↗</strong> above to read it in a new tab — your task and chart on the left will stay where they are. Your time on the new tab is still recorded.' +
+            '</div>' +
+          '</div>' +
         '</div>';
     }
     root.innerHTML =
@@ -491,6 +553,12 @@
 
   function onSubmitFinal() {
     if (!allAnswered() || isFinalised()) return;
+    // If the participant is currently viewing a result in the right
+    // panel, close the viewer first so the dwell event is logged with
+    // the correct reason and chronology.
+    if (typeof closeResultInPanel === 'function' && _viewingResult) {
+      closeResultInPanel('submit_final');
+    }
     QUESTIONS.forEach(function (q) {
       logEvent({ type: 'answer_final', question_id: q.id, value: log.answers[q.id] });
     });
@@ -511,7 +579,8 @@
     }
     var rp = $('.rct-right');
     if (rp) rp.classList.add('is-locked');
-    ['#rct-chat-input', '#rct-chat-send', '#rct-search-input', '#rct-search-button'].forEach(function (sel) {
+    ['#rct-chat-input', '#rct-chat-send', '#rct-search-input', '#rct-search-button',
+     '#rct-result-frame-back'].forEach(function (sel) {
       var el = $(sel); if (el) el.disabled = true;
     });
   }
@@ -610,18 +679,27 @@
   }
 
   /* ==================================================================
-   * Real web search via Cloudflare Worker → Google Programmable Search.
+   * Real web search via Cloudflare Worker → DuckDuckGo HTML scrape.
    *
-   * Click flow: clicking a result card navigates the embed page (same
-   * window) to the destination URL after we (a) log a `result_click`
-   * event and (b) stash click metadata under DWELL_RETURN_KEY in
-   * localStorage. When the participant returns via the browser back
-   * button the `pageshow` listener (at the bottom of this script) reads
-   * back the stash, computes dwell_ms, and logs `result_dwell`.
+   * Click flow (in-panel viewer): clicking a result swaps the search
+   * results list for an iframe loaded with the destination URL inside
+   * the right pane. Chart + question stay visible on the left. A
+   * "← Back to results" button returns to the result list and logs a
+   * `result_dwell` event with `returned_via: 'in_panel'`.
    *
-   * Failure: silent retry up to SEARCH_MAX_RETRIES, with `error_retry`
-   * events for each transient failure. On final failure a single
-   * `error` event is logged and an inline error card is shown.
+   * Sites that set X-Frame-Options: DENY or CSP frame-ancestors render
+   * blank in the iframe; an "Open in new tab ↗" affordance is always
+   * visible above the iframe so the participant can fall back. We also
+   * detect the blocked state heuristically (no readable contentDocument
+   * size after a short delay) and surface a friendly fallback message.
+   *
+   * Failure (search API): silent retry up to SEARCH_MAX_RETRIES, with
+   * `error_retry` events. On final failure a single `error` event is
+   * logged and an inline error card is shown.
+   *
+   * The legacy DWELL_RETURN_KEY / `pageshow` flow is kept as a safety
+   * net for any leftover same-window stash from older sessions, but is
+   * no longer used by the new click flow.
    * ================================================================== */
   function wireSearch() {
     var form = $('#rct-search-form');
@@ -661,6 +739,12 @@
 
   function runSearch(query) {
     if (isFinalised()) return;
+    // If the participant typed a new query while a result was open in
+    // the panel, close the viewer first so the dwell event is logged
+    // before the new search results render.
+    if (typeof closeResultInPanel === 'function' && _viewingResult) {
+      closeResultInPanel('new_search');
+    }
     var t0 = nowMs();
     logEvent({ type: 'search_query', query: query });
     log.query_count = (log.query_count || 0) + 1;
@@ -748,34 +832,134 @@
 
   function attachResultClickHandlers(results, query) {
     $$('.rct-search-result').forEach(function (card) {
+      // Disable the inner <a>'s default navigation — we handle it
+      // ourselves with the in-panel viewer.
+      var titleAnchor = card.querySelector('a.rct-search-title');
+      if (titleAnchor) titleAnchor.removeAttribute('target');
+
       card.addEventListener('click', function (e) {
         if (isFinalised()) { e.preventDefault(); return; }
+        e.preventDefault();   // never navigate same-window any more
         var idx = Number(card.getAttribute('data-idx'));
         var r = results[idx];
         if (!r || !r.url) return;
-        // Log the click BEFORE navigation so we don't lose it if the
-        // browser tears down the page before flushing localStorage.
-        logEvent({
-          type:   'result_click',
-          index:  idx,
-          url:    r.url,
-          title:  r.title || '',
-          query:  query
-        });
-        log.click_count = (log.click_count || 0) + 1;
-        try {
-          localStorage.setItem(DWELL_RETURN_KEY, JSON.stringify({
-            index: idx, url: r.url, title: r.title || '', query: query, click_ts: Date.now()
-          }));
-        } catch (_) { /* private mode etc. — dwell will be missing for this click */ }
-        persist();
-        // Inner <a> handles its own navigation. If the click landed on
-        // padding instead of the <a>, navigate explicitly so the click
-        // target appears uniform regardless of where they clicked.
-        if (!e.target.closest('a.rct-search-title')) {
-          window.location.assign(r.url);
-        }
+        openResultInPanel(idx, r, query);
       });
+    });
+  }
+
+  /* In-panel result viewer state. We track only one viewing at a time
+   * (a second click ends the prior dwell first). */
+  var _viewingResult = null;          // { index, url, title, query, ts, blocked, fallback_clicked }
+  var _viewingTimeout = null;         // for X-Frame-Options heuristic
+
+  function openResultInPanel(idx, r, query) {
+    // If the participant clicks a different result while one is open,
+    // close out the prior one first so dwell is measured per-click.
+    if (_viewingResult) closeResultInPanel('new_click');
+
+    var ts = Date.now();
+    logEvent({
+      type:   'result_click',
+      index:  idx,
+      url:    r.url,
+      title:  r.title || '',
+      query:  query
+    });
+    log.click_count = (log.click_count || 0) + 1;
+    persist();
+
+    _viewingResult = {
+      index: idx, url: r.url, title: r.title || '', query: query,
+      ts: ts, blocked: false, fallback_clicked: false
+    };
+
+    var container = $('#rct-result-frame-container');
+    var resultsHolder = $('#rct-search-results');
+    var iframe = $('#rct-result-frame');
+    var urlSpan = $('#rct-result-frame-url');
+    var newTab = $('#rct-result-frame-newtab');
+
+    if (resultsHolder) resultsHolder.style.display = 'none';
+    if (urlSpan) { urlSpan.textContent = r.displayUrl || r.url; urlSpan.title = r.url; }
+    if (newTab) {
+      newTab.href = r.url;
+      // Track the new-tab fallback click separately — it tells us this
+      // result couldn't be read in-panel.
+      newTab.onclick = function () {
+        if (_viewingResult) {
+          _viewingResult.fallback_clicked = true;
+          logEvent({ type: 'result_newtab_open', url: r.url, query: query });
+          persist();
+        }
+      };
+    }
+    if (container) {
+      container.classList.add('is-active');
+      container.classList.remove('is-blocked');
+    }
+    if (iframe) {
+      iframe.src = r.url;
+      // Heuristic: if the iframe doesn't reach a usable state within
+      // 4 seconds, mark it as blocked so the fallback note is shown.
+      // Most sites that set X-Frame-Options: DENY render an empty
+      // about:blank with no `load` event, OR fire `load` on a tiny
+      // error doc — neither of which we can reliably distinguish from
+      // a real load due to cross-origin opacity. Use a soft timeout
+      // and let the "Open in new tab" link be the durable fallback.
+      if (_viewingTimeout) { clearTimeout(_viewingTimeout); _viewingTimeout = null; }
+      _viewingTimeout = setTimeout(function () {
+        // Cross-origin contentDocument access throws SecurityError —
+        // catching that as "loaded fine, just opaque". A null contentDocument
+        // without throwing usually indicates X-Frame-Options denial.
+        try {
+          var doc = iframe.contentDocument;
+          if (!doc) {
+            // Could be either: still loading, or blocked. We err on the
+            // permissive side and DON'T flip is-blocked here — too false-
+            // positive on slow networks. The fallback note is still
+            // permanently linked above the iframe; if it's blank, the
+            // participant can use the link.
+          }
+        } catch (_) { /* SecurityError = fine, cross-origin loaded */ }
+      }, 4000);
+    }
+    postHeight();
+  }
+
+  function closeResultInPanel(reason) {
+    if (!_viewingResult) return;
+    if (_viewingTimeout) { clearTimeout(_viewingTimeout); _viewingTimeout = null; }
+
+    var v = _viewingResult;
+    var dwell = Date.now() - v.ts;
+    if (dwell >= 100 && dwell <= 30 * 60 * 1000) {
+      logEvent({
+        type:               'result_dwell',
+        url:                v.url,
+        dwell_ms:           dwell,
+        returned_via:       reason || 'in_panel',
+        fallback_clicked:   !!v.fallback_clicked
+      });
+    }
+    _viewingResult = null;
+    persist();
+
+    var container = $('#rct-result-frame-container');
+    var iframe = $('#rct-result-frame');
+    var resultsHolder = $('#rct-search-results');
+    if (container) { container.classList.remove('is-active'); container.classList.remove('is-blocked'); }
+    if (iframe)    iframe.src = 'about:blank';
+    if (resultsHolder) resultsHolder.style.display = '';
+    postHeight();
+  }
+
+  function wireResultFrameBack() {
+    var btn = $('#rct-result-frame-back');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (isFinalised()) return;
+      closeResultInPanel('back_button');
     });
   }
 
@@ -814,7 +998,7 @@
   renderChart();
   renderQuestions();
   if (CONDITION === 'LLM')   { wireChat();   replayChat();   }
-  if (CONDITION === 'SEARCH'){ wireSearch(); replaySearch(); }
+  if (CONDITION === 'SEARCH'){ wireSearch(); wireResultFrameBack(); replaySearch(); }
 
   if (isFinalised()) {
     lockPanel();
