@@ -217,7 +217,7 @@ Different instructions per condition? Move `INSTRUCTIONS_HTML` below the `CONDIT
 }
 ```
 
-For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from a real Google Programmable Search (Custom Search JSON API) proxied through the same Cloudflare Worker; clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *Google Custom Search Engine setup* below.
+For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from the **Brave Search API** proxied through the same Cloudflare Worker; clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *Brave Search API setup* below.
 
 ### SEARCH event types
 
@@ -292,43 +292,42 @@ The worker now holds the key; no further key handling is needed in your repo.
 The Worker exposes two routes under one origin-locked CORS policy:
 
 - **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY`. `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
-- **`POST /search`** — forward to Google Programmable Search with the secret `GOOGLE_CSE_API_KEY` and the public-but-env-var `GOOGLE_CSE_ID`. Returns up to 10 `{title, url, displayUrl, snippet}` items.
+- **`POST /search`** — forward to **Brave Search API** with the secret `BRAVE_SEARCH_API_KEY`. Returns up to 20 `{title, url, displayUrl, snippet}` items. (Originally written against Google Programmable Search, but Google removed the "search the entire web" option for new engines, so we switched to Brave. Browser-facing response shape is unchanged.)
 
 Cross-cutting:
 - **Origin allowlist** — every request is checked against `ALLOWED_ORIGINS`. Off-list requests get `403 Forbidden origin`.
 - **Method allowlist** — POST only (plus OPTIONS for CORS pre-flight).
 - **CORS headers** — `Access-Control-Allow-Origin` is set to the matching allowed origin (per-request), not `*`.
 
-For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key + a daily query cap on the Google CSE.
+For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key. Brave Search has its own quota dashboard at [api.search.brave.com](https://api.search.brave.com/) and a per-month cap on the free tier.
 
-## Google Custom Search Engine setup (~10 minutes, one time)
+## Brave Search API setup (~5 minutes, one time)
 
-The SEARCH condition needs a Google API key and a Programmable Search Engine id (`cx`). Both go into the Cloudflare Worker as env vars; nothing ships in `embed.html`.
+The SEARCH condition needs one Brave Search API key. It goes into the Cloudflare Worker as a secret; nothing ships in `embed.html`.
 
-### Step 1 — create the search engine
+> **Why Brave instead of Google?** Google's Programmable Search Engine no longer allows "search the entire web" for new engines (since 2024). Brave runs an independent index, returns plain organic results in clean JSON, and the free tier is large enough for a thesis pilot. The visual presentation in `embed.html` (blue title link, green URL hostname, grey snippet) is identical regardless of backend.
 
-1. Go to [programmablesearchengine.google.com](https://programmablesearchengine.google.com/) and click **Add**.
-2. Name it (e.g. `thesis-rct`). Under **What to search**, choose **Search the entire web** (toggle on after creating; new engines default to specific sites).
-3. Click **Create**. On the next page, copy the **Search engine ID** (starts like `017576662512468239146:` or is a base64-ish string in newer accounts). This is your `cx`.
+### Step 1 — create the API key
 
-### Step 2 — get the API key
+1. Go to [api.search.brave.com](https://api.search.brave.com/) and sign up (or log in with Google/GitHub).
+2. **Subscriptions → Subscribe** to a free plan. Brave offers a couple of free tiers — pick whichever covers your needs:
+   - **Data for AI Free** — 2,000 queries/month, 1 query/second, no card required.
+   - **Web Search Free** — same kind of free tier, also 1 qps. Pick this if you want results closest to brave.com search itself.
+3. **API Keys → Add API Key** → name it (e.g. `thesis-rct`) → **Generate**.
+4. Copy the key (Brave only shows it once on creation — save it somewhere temporarily).
 
-1. Go to [console.cloud.google.com](https://console.cloud.google.com/) and pick (or create) a project.
-2. **APIs & Services → Library** → search for **Custom Search API** → click → **Enable**.
-3. **APIs & Services → Credentials → Create Credentials → API key**. Copy the key.
-4. *(Recommended)* Click the key → **Edit** → **Application restrictions: HTTP referrers** is fine, but for Workers (which call from a Cloudflare IP) leave unrestricted **and** set **API restrictions: Custom Search API only**. Save.
-
-### Step 3 — wire the worker
+### Step 2 — wire the worker
 
 In Workers & Pages → your worker → **Settings → Variables and Secrets**:
 
-- `GOOGLE_CSE_API_KEY` (Type: **Secret**) → the Google API key.
-- `GOOGLE_CSE_ID` (Type: **Text**) → the `cx`.
-- `SEARCH_NUM_RESULTS` (Type: **Text**, optional) → `1`–`10`, default 10.
+- `BRAVE_SEARCH_API_KEY` (Type: **Secret**) — paste the key from Step 1.
+- `SEARCH_NUM_RESULTS` (Type: **Text**, optional) → `1`–`20`, default 10.
+- `SEARCH_COUNTRY` (Type: **Text**, optional) → two-letter ISO code, default `US`. Affects result locale.
+- `SEARCH_SAFESEARCH` (Type: **Text**, optional) → `off` | `moderate` | `strict`, default `moderate`.
 
 Save. Your worker is now ready to serve `POST /search`.
 
-### Step 4 — test the new route
+### Step 3 — test the new route
 
 ```bash
 curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
@@ -337,11 +336,11 @@ curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
   -d '{"query":"acme corp profitable"}'
 ```
 
-Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}`. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `500` mentioning `GOOGLE_CSE_API_KEY` means the secrets aren't set.
+Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}`. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `500` mentioning `BRAVE_SEARCH_API_KEY` means the secret isn't set. A `429` from Brave means you exceeded 1 qps — re-test after a moment.
 
-### Quota
+### Quota & cost
 
-Google's free tier is **100 queries/day** per project. Beyond that, $5 per 1,000 queries (capped at 10k/day). For a 200-participant pilot at ~5 queries each = 1,000 queries → $5 if not spread over 10 days. Set a daily cap in **APIs & Services → Custom Search API → Quotas** to avoid surprises.
+Brave free tiers: **2,000 queries/month, 1 qps**, no card required. For a 200-participant pilot at ~5 queries each = 1,000 queries → comfortably inside the free tier. Beyond the free tier, paid tiers start at $3/CPM (Data-for-AI) or $9/CPM (Web Search) — see [api.search.brave.com](https://api.search.brave.com/) pricing. Brave's dashboard shows live usage; consider setting a monthly hard cap on your account.
 
 ## Refresh resilience
 
@@ -388,7 +387,7 @@ Use this path when you don't have a public URL to host `embed.html` on. The two 
 | Hosting | Static URL (`embed.html`) + Qualtrics paste | Everything inside Qualtrics |
 | Chart | Hand-rolled SVG | [Chart.js](https://www.chartjs.org/) via CDN |
 | LLM | Single round-trip (non-streaming) | **Streaming** (OpenRouter SSE) |
-| **SEARCH** | **Real Google Programmable Search** via Worker `/search` route + click + dwell tracking | **Still mocked** (4 hardcoded results); click event logged but no navigation |
+| **SEARCH** | **Real Brave Search** via Worker `/search` route + click + dwell tracking | **Still mocked** (4 hardcoded results); click event logged but no navigation |
 | Question types | True/False only | True/False, MC (single), MC (multi), Likert |
 | Embedded Data field | `InteractionLog` (one) | `LLM_Log` and `Search_Log` (per condition) |
 | Layout | `min-height: 560px` (page grows) | `height: 600px` with internal scroll per panel |

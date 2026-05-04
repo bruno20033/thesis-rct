@@ -4,9 +4,14 @@
  * Two routes, same Worker:
  *   POST /  or  POST /llm     → forwards to OpenRouter chat completions
  *                               with the secret OPENROUTER_API_KEY.
- *   POST /search              → forwards to Google Programmable Search
- *                               (Custom Search JSON API) with the secret
- *                               GOOGLE_CSE_API_KEY + public GOOGLE_CSE_ID.
+ *   POST /search              → forwards to Brave Search API with the
+ *                               secret BRAVE_SEARCH_API_KEY.
+ *
+ * (Originally written against Google Programmable Search, but Google
+ *  removed the "Search the entire web" option for new Programmable
+ *  Search Engines, so we switched to Brave. The response shape returned
+ *  to the browser is unchanged: {items: [{title, url, displayUrl,
+ *  snippet}]}.)
  *
  * Both routes share the same Origin allowlist + CORS headers + JSON
  * helpers so the participant's browser only sees Worker URLs and never
@@ -15,24 +20,24 @@
  * Required env vars (Workers & Pages → your worker → Settings →
  *   Variables and Secrets):
  *
- *   OPENROUTER_API_KEY    Secret    Real OpenRouter key.
- *   GOOGLE_CSE_API_KEY    Secret    Google API key (with Custom Search
- *                                    API enabled at console.cloud.google.com).
- *   GOOGLE_CSE_ID         Text      The `cx` from
- *                                    programmablesearchengine.google.com,
- *                                    e.g. "017576662512468239146:omuauf_lfve".
- *                                    The CSE must be configured to
- *                                    "Search the entire web".
- *   ALLOWED_ORIGINS       Text      Comma-separated origins. Example:
- *                                    https://bruno20033.github.io,
- *                                    https://oii.eu.qualtrics.com
+ *   OPENROUTER_API_KEY      Secret    Real OpenRouter key.
+ *   BRAVE_SEARCH_API_KEY    Secret    From api.search.brave.com (free
+ *                                      tier: 2,000 queries/month, 1 qps).
+ *   ALLOWED_ORIGINS         Text      Comma-separated origins. Example:
+ *                                      https://bruno20033.github.io,
+ *                                      https://oii.eu.qualtrics.com
  *
  * Optional:
- *   HTTP_REFERER          Text      Sent to OpenRouter for attribution.
- *   X_TITLE               Text      Sent to OpenRouter for attribution.
- *   MAX_TOKENS            Text      Hard cap on max_tokens (default 1024).
- *   SEARCH_NUM_RESULTS    Text      Max results per search query (1-10,
- *                                    default 10).
+ *   HTTP_REFERER            Text      Sent to OpenRouter for attribution.
+ *   X_TITLE                 Text      Sent to OpenRouter for attribution.
+ *   MAX_TOKENS              Text      Hard cap on max_tokens (default 1024).
+ *   SEARCH_NUM_RESULTS      Text      Max results per search query (1-20,
+ *                                      default 10).
+ *   SEARCH_COUNTRY          Text      Two-letter ISO country code passed
+ *                                      to Brave (default 'US'). Affects
+ *                                      result locale.
+ *   SEARCH_SAFESEARCH       Text      'off' | 'moderate' | 'strict'
+ *                                      (default 'moderate').
  */
 
 export default {
@@ -57,14 +62,14 @@ export default {
     }
 
     // ---------------------------------------------------------------
-    // SEARCH route → Google Programmable Search (Custom Search JSON API)
+    // SEARCH route → Brave Search API
     // ---------------------------------------------------------------
     if (url.pathname === '/search') {
       if (request.method !== 'POST') {
         return json({ error: 'Method Not Allowed' }, 405, request, env);
       }
-      if (!env.GOOGLE_CSE_API_KEY || !env.GOOGLE_CSE_ID) {
-        return json({ error: 'Worker misconfigured: GOOGLE_CSE_API_KEY/GOOGLE_CSE_ID not set' }, 500, request, env);
+      if (!env.BRAVE_SEARCH_API_KEY) {
+        return json({ error: 'Worker misconfigured: BRAVE_SEARCH_API_KEY not set' }, 500, request, env);
       }
 
       let body;
@@ -74,34 +79,47 @@ export default {
         return json({ error: 'query required' }, 400, request, env);
       }
 
-      const num = clampInt(env.SEARCH_NUM_RESULTS, 10, 1, 10);
+      const count = clampInt(env.SEARCH_NUM_RESULTS, 10, 1, 20);
       const params = new URLSearchParams({
-        key:  env.GOOGLE_CSE_API_KEY,
-        cx:   env.GOOGLE_CSE_ID,
-        q:    query,
-        num:  String(num),
-        safe: 'active',
+        q:          query,
+        count:      String(count),
+        country:    env.SEARCH_COUNTRY    || 'US',
+        safesearch: env.SEARCH_SAFESEARCH || 'moderate',
       });
       const upstream = await fetch(
-        'https://www.googleapis.com/customsearch/v1?' + params.toString()
+        'https://api.search.brave.com/res/v1/web/search?' + params.toString(),
+        {
+          headers: {
+            'Accept':                'application/json',
+            'Accept-Encoding':       'gzip',
+            'X-Subscription-Token':  env.BRAVE_SEARCH_API_KEY,
+          },
+        }
       );
       const data = await upstream.json().catch(() => ({}));
 
       if (!upstream.ok) {
         return json(
-          { error: (data.error && data.error.message) || 'CSE error', http_status: upstream.status },
+          {
+            error: (data && (data.message || (data.error && data.error.detail))) || 'Brave search error',
+            http_status: upstream.status,
+          },
           upstream.status,
           request, env
         );
       }
-      const items = (data.items || []).map(it => ({
-        title:      it.title || '',
-        url:        it.link  || '',
-        displayUrl: it.displayLink || '',
-        snippet:    it.snippet || '',
+
+      // Brave returns { web: { results: [{ title, url, description, meta_url: { hostname }, ... }] }, ... }
+      // Normalise to the same {title, url, displayUrl, snippet} shape the
+      // browser already expects from the previous Google CSE wiring.
+      const webResults = (data && data.web && Array.isArray(data.web.results)) ? data.web.results : [];
+      const items = webResults.map(r => ({
+        title:      r.title || '',
+        url:        r.url || '',
+        displayUrl: (r.meta_url && r.meta_url.hostname) || hostnameOf(r.url),
+        snippet:    r.description || '',
       }));
-      const total = (data.searchInformation && data.searchInformation.totalResults) || '0';
-      return json({ items, total: String(total) }, 200, request, env);
+      return json({ items, total: String(webResults.length) }, 200, request, env);
     }
 
     // ---------------------------------------------------------------
@@ -184,4 +202,8 @@ function clampInt(raw, fallback, min, max) {
   const n = Number(raw);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, Math.trunc(n)));
+}
+
+function hostnameOf(url) {
+  try { return new URL(url).hostname; } catch { return url || ''; }
 }
