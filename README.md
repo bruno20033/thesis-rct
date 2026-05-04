@@ -217,7 +217,7 @@ Different instructions per condition? Move `INSTRUCTIONS_HTML` below the `CONDIT
 }
 ```
 
-For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from the **Brave Search API** proxied through the same Cloudflare Worker; clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *Brave Search API setup* below.
+For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from **DuckDuckGo** scraped server-side by the same Cloudflare Worker (no API key required); clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *DuckDuckGo search backend* below.
 
 ### SEARCH event types
 
@@ -292,42 +292,42 @@ The worker now holds the key; no further key handling is needed in your repo.
 The Worker exposes two routes under one origin-locked CORS policy:
 
 - **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY`. `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
-- **`POST /search`** — forward to **Brave Search API** with the secret `BRAVE_SEARCH_API_KEY`. Returns up to 20 `{title, url, displayUrl, snippet}` items. (Originally written against Google Programmable Search, but Google removed the "search the entire web" option for new engines, so we switched to Brave. Browser-facing response shape is unchanged.)
+- **`POST /search`** — server-side scrape of DuckDuckGo's HTML results page, parsed into JSON. **No API key, no signup, no quota cap.** Returns up to 30 `{title, url, displayUrl, snippet}` items. Sponsored ads are filtered out. (We tried Google Programmable Search first — Google removed "search the entire web" for new engines in 2024 — and Brave Search next — their free tier requires a billing card. DuckDuckGo's HTML page is the best card-free option.)
 
 Cross-cutting:
 - **Origin allowlist** — every request is checked against `ALLOWED_ORIGINS`. Off-list requests get `403 Forbidden origin`.
 - **Method allowlist** — POST only (plus OPTIONS for CORS pre-flight).
 - **CORS headers** — `Access-Control-Allow-Origin` is set to the matching allowed origin (per-request), not `*`.
 
-For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key. Brave Search has its own quota dashboard at [api.search.brave.com](https://api.search.brave.com/) and a per-month cap on the free tier.
+For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key. DuckDuckGo has no formal rate limit, but they do throttle aggressive automated traffic — for thesis-scale (a few hundred queries/day) this is a non-issue.
 
-## Brave Search API setup (~5 minutes, one time)
+## DuckDuckGo search backend (zero setup)
 
-The SEARCH condition needs one Brave Search API key. It goes into the Cloudflare Worker as a secret; nothing ships in `embed.html`.
+The SEARCH condition's results come from **DuckDuckGo**, scraped server-side by the Cloudflare Worker. No API key, no signup, no card, no quota — DDG's HTML page is publicly accessible and they permit non-commercial use.
 
-> **Why Brave instead of Google?** Google's Programmable Search Engine no longer allows "search the entire web" for new engines (since 2024). Brave runs an independent index, returns plain organic results in clean JSON, and the free tier is large enough for a thesis pilot. The visual presentation in `embed.html` (blue title link, green URL hostname, grey snippet) is identical regardless of backend.
+> **Why DuckDuckGo?** We considered three alternatives. Google Programmable Search no longer allows "search the entire web" for new engines (since 2024). Brave Search's free tier requires a billing card on file. DuckDuckGo is the only option that lets a thesis pilot run end-to-end with zero per-query cost and no account friction. Visual presentation in `embed.html` (blue title link, green URL hostname, grey snippet) is identical regardless of backend.
 
-### Step 1 — create the API key
+### What it does behind the scenes
 
-1. Go to [api.search.brave.com](https://api.search.brave.com/) and sign up (or log in with Google/GitHub).
-2. **Subscriptions → Subscribe** to a free plan. Brave offers a couple of free tiers — pick whichever covers your needs:
-   - **Data for AI Free** — 2,000 queries/month, 1 query/second, no card required.
-   - **Web Search Free** — same kind of free tier, also 1 qps. Pick this if you want results closest to brave.com search itself.
-3. **API Keys → Add API Key** → name it (e.g. `thesis-rct`) → **Generate**.
-4. Copy the key (Brave only shows it once on creation — save it somewhere temporarily).
+The Worker `POST /search` route:
+1. Takes a `{ query }` JSON body from the browser.
+2. POSTs `q=<query>&kl=<region>&kp=<safesearch>` to `html.duckduckgo.com/html/` with a normal browser User-Agent.
+3. Parses the HTML response, extracting up to N organic results.
+4. **Filters out sponsored ads** (results with `result--ad` / `result__sponsored` classes, or `duckduckgo.com/y.js` redirect URLs) so the experimental control isn't contaminated with paid placements.
+5. **Unwraps DuckDuckGo's redirect URLs** (`//duckduckgo.com/l/?uddg=…`) to the real destination, so the participant's click navigates straight to e.g. `wikipedia.org` and dwell time is measured against the actual site.
+6. Returns the same `{ items: [{title, url, displayUrl, snippet}], total }` shape the browser already expects.
 
-### Step 2 — wire the worker
+### Optional Worker env vars
 
 In Workers & Pages → your worker → **Settings → Variables and Secrets**:
 
-- `BRAVE_SEARCH_API_KEY` (Type: **Secret**) — paste the key from Step 1.
-- `SEARCH_NUM_RESULTS` (Type: **Text**, optional) → `1`–`20`, default 10.
-- `SEARCH_COUNTRY` (Type: **Text**, optional) → two-letter ISO code, default `US`. Affects result locale.
-- `SEARCH_SAFESEARCH` (Type: **Text**, optional) → `off` | `moderate` | `strict`, default `moderate`.
+- `SEARCH_NUM_RESULTS` (Type: **Text**) → `1`–`30`, default 10.
+- `SEARCH_REGION` (Type: **Text**) → DuckDuckGo region code, default `wt-wt` (no region). Examples: `us-en`, `uk-en`, `de-de`. Affects result locale.
+- `SEARCH_SAFESEARCH` (Type: **Text**) → `off` | `moderate` | `strict`, default `moderate`.
 
-Save. Your worker is now ready to serve `POST /search`.
+None of these are required — the defaults work out of the box.
 
-### Step 3 — test the new route
+### Test the route
 
 ```bash
 curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
@@ -336,11 +336,13 @@ curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
   -d '{"query":"acme corp profitable"}'
 ```
 
-Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}`. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `500` mentioning `BRAVE_SEARCH_API_KEY` means the secret isn't set. A `429` from Brave means you exceeded 1 qps — re-test after a moment.
+Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}` with ~10 organic results. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `429 DuckDuckGo rate-limit/anomaly check` means DDG temporarily blocked the Worker — wait a minute and re-test.
 
-### Quota & cost
+### Reliability notes
 
-Brave free tiers: **2,000 queries/month, 1 qps**, no card required. For a 200-participant pilot at ~5 queries each = 1,000 queries → comfortably inside the free tier. Beyond the free tier, paid tiers start at $3/CPM (Data-for-AI) or $9/CPM (Web Search) — see [api.search.brave.com](https://api.search.brave.com/) pricing. Brave's dashboard shows live usage; consider setting a monthly hard cap on your account.
+- DDG's HTML structure (`result__a`, `result__snippet` class names) has been stable for years; the parser is also forgiving (a small markup tweak won't silently zero out results — the parser would simply return fewer entries and the UI would show what it got).
+- If DDG ever serves the "anomaly" page (their bot challenge), the Worker surfaces a `429` instead of returning empty results, so the embed's retry loop kicks in (2 retries with back-off, then a clean `error` event).
+- For thesis-scale (a few hundred queries/day) DDG won't throttle. If you ever need to scale to thousands of queries/day, switch the backend to Brave (with a billing card) or self-host SearXNG — the Worker code change is small (one upstream fetch).
 
 ## Refresh resilience
 
@@ -387,7 +389,7 @@ Use this path when you don't have a public URL to host `embed.html` on. The two 
 | Hosting | Static URL (`embed.html`) + Qualtrics paste | Everything inside Qualtrics |
 | Chart | Hand-rolled SVG | [Chart.js](https://www.chartjs.org/) via CDN |
 | LLM | Single round-trip (non-streaming) | **Streaming** (OpenRouter SSE) |
-| **SEARCH** | **Real Brave Search** via Worker `/search` route + click + dwell tracking | **Still mocked** (4 hardcoded results); click event logged but no navigation |
+| **SEARCH** | **Real DuckDuckGo** via Worker `/search` route + click + dwell tracking (no API key) | **Still mocked** (4 hardcoded results); click event logged but no navigation |
 | Question types | True/False only | True/False, MC (single), MC (multi), Likert |
 | Embedded Data field | `InteractionLog` (one) | `LLM_Log` and `Search_Log` (per condition) |
 | Layout | `min-height: 560px` (page grows) | `height: 600px` with internal scroll per panel |

@@ -4,14 +4,17 @@
  * Two routes, same Worker:
  *   POST /  or  POST /llm     → forwards to OpenRouter chat completions
  *                               with the secret OPENROUTER_API_KEY.
- *   POST /search              → forwards to Brave Search API with the
- *                               secret BRAVE_SEARCH_API_KEY.
+ *   POST /search              → server-side scrape of DuckDuckGo's HTML
+ *                               results page, parsed into JSON. No API
+ *                               key, no signup, no quota.
  *
- * (Originally written against Google Programmable Search, but Google
- *  removed the "Search the entire web" option for new Programmable
- *  Search Engines, so we switched to Brave. The response shape returned
- *  to the browser is unchanged: {items: [{title, url, displayUrl,
- *  snippet}]}.)
+ * History: the SEARCH route originally targeted Google Programmable
+ * Search (Google removed "search the entire web" for new engines in
+ * 2024) and then Brave Search (free tier requires a payment card on
+ * file). DuckDuckGo's HTML page is publicly accessible and DDG
+ * permits non-commercial use, which suits a thesis pilot. The
+ * browser-facing response shape is unchanged across all backends:
+ *   {items: [{title, url, displayUrl, snippet}], total}
  *
  * Both routes share the same Origin allowlist + CORS headers + JSON
  * helpers so the participant's browser only sees Worker URLs and never
@@ -21,21 +24,21 @@
  *   Variables and Secrets):
  *
  *   OPENROUTER_API_KEY      Secret    Real OpenRouter key.
- *   BRAVE_SEARCH_API_KEY    Secret    From api.search.brave.com (free
- *                                      tier: 2,000 queries/month, 1 qps).
  *   ALLOWED_ORIGINS         Text      Comma-separated origins. Example:
  *                                      https://bruno20033.github.io,
  *                                      https://oii.eu.qualtrics.com
+ *
+ *   (No SEARCH_* secret is required — DuckDuckGo needs none.)
  *
  * Optional:
  *   HTTP_REFERER            Text      Sent to OpenRouter for attribution.
  *   X_TITLE                 Text      Sent to OpenRouter for attribution.
  *   MAX_TOKENS              Text      Hard cap on max_tokens (default 1024).
- *   SEARCH_NUM_RESULTS      Text      Max results per search query (1-20,
+ *   SEARCH_NUM_RESULTS      Text      Max results per search query (1-30,
  *                                      default 10).
- *   SEARCH_COUNTRY          Text      Two-letter ISO country code passed
- *                                      to Brave (default 'US'). Affects
- *                                      result locale.
+ *   SEARCH_REGION           Text      DDG region code, default 'wt-wt'
+ *                                      (no region). Examples: 'us-en',
+ *                                      'uk-en', 'de-de'.
  *   SEARCH_SAFESEARCH       Text      'off' | 'moderate' | 'strict'
  *                                      (default 'moderate').
  */
@@ -62,14 +65,12 @@ export default {
     }
 
     // ---------------------------------------------------------------
-    // SEARCH route → Brave Search API
+    // SEARCH route → DuckDuckGo HTML results, parsed server-side.
+    // No API key required.
     // ---------------------------------------------------------------
     if (url.pathname === '/search') {
       if (request.method !== 'POST') {
         return json({ error: 'Method Not Allowed' }, 405, request, env);
-      }
-      if (!env.BRAVE_SEARCH_API_KEY) {
-        return json({ error: 'Worker misconfigured: BRAVE_SEARCH_API_KEY not set' }, 500, request, env);
       }
 
       let body;
@@ -79,47 +80,49 @@ export default {
         return json({ error: 'query required' }, 400, request, env);
       }
 
-      const count = clampInt(env.SEARCH_NUM_RESULTS, 10, 1, 20);
-      const params = new URLSearchParams({
-        q:          query,
-        count:      String(count),
-        country:    env.SEARCH_COUNTRY    || 'US',
-        safesearch: env.SEARCH_SAFESEARCH || 'moderate',
+      const count = clampInt(env.SEARCH_NUM_RESULTS, 10, 1, 30);
+      const region = env.SEARCH_REGION || 'wt-wt';
+      // DDG safesearch query param: kp=1 strict, kp=-1 off, kp=-2 moderate.
+      const safe = (env.SEARCH_SAFESEARCH || 'moderate').toLowerCase();
+      const kp = safe === 'strict' ? '1' : (safe === 'off' ? '-1' : '-2');
+
+      const formBody = new URLSearchParams({
+        q:  query,
+        kl: region,   // region/locale code
+        kp: kp,       // safesearch
+      }).toString();
+
+      // POST to DuckDuckGo HTML endpoint. POST returns a fully rendered
+      // HTML results page with stable .result__a / .result__snippet
+      // anchors that we can extract with HTMLRewriter.
+      const upstream = await fetch('https://html.duckduckgo.com/html/', {
+        method: 'POST',
+        headers: {
+          'User-Agent':      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+          'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Content-Type':    'application/x-www-form-urlencoded',
+        },
+        body: formBody,
       });
-      const upstream = await fetch(
-        'https://api.search.brave.com/res/v1/web/search?' + params.toString(),
-        {
-          headers: {
-            'Accept':                'application/json',
-            'Accept-Encoding':       'gzip',
-            'X-Subscription-Token':  env.BRAVE_SEARCH_API_KEY,
-          },
-        }
-      );
-      const data = await upstream.json().catch(() => ({}));
 
       if (!upstream.ok) {
         return json(
-          {
-            error: (data && (data.message || (data.error && data.error.detail))) || 'Brave search error',
-            http_status: upstream.status,
-          },
-          upstream.status,
+          { error: 'DuckDuckGo HTTP ' + upstream.status, http_status: upstream.status },
+          upstream.status >= 400 ? upstream.status : 502,
           request, env
         );
       }
 
-      // Brave returns { web: { results: [{ title, url, description, meta_url: { hostname }, ... }] }, ... }
-      // Normalise to the same {title, url, displayUrl, snippet} shape the
-      // browser already expects from the previous Google CSE wiring.
-      const webResults = (data && data.web && Array.isArray(data.web.results)) ? data.web.results : [];
-      const items = webResults.map(r => ({
-        title:      r.title || '',
-        url:        r.url || '',
-        displayUrl: (r.meta_url && r.meta_url.hostname) || hostnameOf(r.url),
-        snippet:    r.description || '',
-      }));
-      return json({ items, total: String(webResults.length) }, 200, request, env);
+      const html = await upstream.text();
+
+      // Detect DDG's anti-bot interstitial and surface it cleanly.
+      if (/anomaly|please try again/i.test(html) && !/result__a/.test(html)) {
+        return json({ error: 'DuckDuckGo rate-limit/anomaly check; retry shortly.' }, 429, request, env);
+      }
+
+      const items = parseDuckDuckGoHtml(html, count);
+      return json({ items, total: String(items.length) }, 200, request, env);
     }
 
     // ---------------------------------------------------------------
@@ -206,4 +209,98 @@ function clampInt(raw, fallback, min, max) {
 
 function hostnameOf(url) {
   try { return new URL(url).hostname; } catch { return url || ''; }
+}
+
+// -------------------------------------------------------------------
+// DuckDuckGo HTML parser
+// -------------------------------------------------------------------
+//
+// DDG's html.duckduckgo.com results page renders each web result as:
+//
+//   <div class="result results_links results_links_deep web-result">
+//     <h2 class="result__title">
+//       <a class="result__a" href="REDIRECT_URL">TITLE_HTML</a>
+//     </h2>
+//     <a class="result__snippet" href="REDIRECT_URL">SNIPPET_HTML</a>
+//     <a class="result__url" href="REDIRECT_URL">DISPLAY_URL</a>
+//   </div>
+//
+// REDIRECT_URL is one of:
+//   //duckduckgo.com/l/?uddg=ENCODED_REAL_URL&...   (DDG redirect wrapper)
+//   https://www.example.com/...                     (occasionally direct)
+//
+// The HTML is reasonably stable — DDG hasn't changed these class names
+// in years — but the parser is forgiving so a small markup tweak won't
+// silently zero out results.
+function parseDuckDuckGoHtml(html, max) {
+  // Split the page into per-result blocks. Each organic result block
+  // begins with `<div class="result results_links ...">`. Sponsored
+  // results carry an extra `result--ad` / `result__sponsored` class
+  // and we skip them so the experimental control isn't contaminated
+  // with paid placements.
+  var blocks = html.split(/<div\s+class="result\s+results_links/);
+  var results = [];
+
+  for (var i = 1; i < blocks.length && results.length < max; i++) {
+    var block = blocks[i];
+
+    // Skip sponsored / ad blocks.
+    if (/result--ad|result__sponsored|nrn-react-div/i.test(block)) continue;
+
+    // Title + outbound href.
+    var titleMatch = /<a\s+rel="nofollow"\s+class="result__a"\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block);
+    if (!titleMatch) continue;
+    var url = unwrapDdgUrl(titleMatch[1]);
+    var title = stripHtml(titleMatch[2]);
+    if (!url || !title) continue;
+
+    // Skip residual ad redirects that escaped the sponsored-class check.
+    if (/duckduckgo\.com\/y\.js/i.test(url)) continue;
+
+    // Snippet — separate regex so we tolerate the result__extras div
+    // that DDG injects between title and snippet.
+    var snippetMatch = /<a\s+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(block);
+    var snippet = snippetMatch ? stripHtml(snippetMatch[1]) : '';
+
+    results.push({
+      title: title,
+      url: url,
+      displayUrl: hostnameOf(url),
+      snippet: snippet
+    });
+  }
+  return results;
+}
+
+function unwrapDdgUrl(href) {
+  // External links land at //duckduckgo.com/l/?uddg=ENCODED&rut=...
+  // Pull out the actual destination so the click navigates straight to
+  // the real site, not through DDG's redirector.
+  if (!href) return '';
+  if (href.indexOf('//duckduckgo.com/l/?') === 0) href = 'https:' + href;
+  if (href.indexOf('https://duckduckgo.com/l/?') === 0 ||
+      href.indexOf('http://duckduckgo.com/l/?')  === 0) {
+    try {
+      var u = new URL(href);
+      var real = u.searchParams.get('uddg');
+      return real ? decodeURIComponent(real) : href;
+    } catch { return href; }
+  }
+  return href.indexOf('//') === 0 ? 'https:' + href : href;
+}
+
+function stripHtml(s) {
+  return String(s)
+    .replace(/<br\s*\/?>/gi, ' ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g,  '&')
+    .replace(/&lt;/g,   '<')
+    .replace(/&gt;/g,   '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g,  "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&#x27;/g, "'")
+    .replace(/&hellip;/g, '…')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
