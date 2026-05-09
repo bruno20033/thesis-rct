@@ -44,6 +44,13 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('prompt_count',    String(log.prompt_count   || 0));
         Q.setEmbeddedData('response_count',  String(log.response_count || 0));
         Q.setEmbeddedData('session_id',      log.session_id || '');
+        // arm: 'socratic' | 'unrestricted' for LLM condition; '' for SEARCH.
+        Q.setEmbeddedData('arm',             log.arm || '');
+        // Judge metadata (Socratic arm only — empty for other arms).
+        Q.setEmbeddedData('judge_model',         log.judge_model || '');
+        Q.setEmbeddedData('judge_mode',          log.judge_mode  || '');
+        Q.setEmbeddedData('judge_call_count',    String(log.judge_call_count    || 0));
+        Q.setEmbeddedData('judge_failure_count', String(log.judge_failure_count || 0));
         if (log.answers) {
           Object.keys(log.answers).forEach(function (qid) {
             var v = log.answers[qid];
@@ -62,11 +69,12 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         // Embedded Data so they appear as CSV columns.
         // -------------------------------------------------------------
         var MAX_TURNS = 20;
-        var prompts   = [];
-        var responses = [];
-        var queries   = [];
-        var clicks    = [];   // result_click events    (SEARCH condition)
-        var dwells    = [];   // result_dwell events    (SEARCH condition)
+        var prompts        = [];
+        var responses      = [];
+        var queries        = [];
+        var clicks         = [];   // result_click events    (SEARCH condition)
+        var dwells         = [];   // result_dwell events    (SEARCH condition)
+        var judgements     = [];   // judge_result events on initial drafts (Socratic arm)
         var events = log.events || [];
         for (var i = 0; i < events.length; i++) {
           var ev = events[i];
@@ -75,6 +83,11 @@ Qualtrics.SurveyEngine.addOnReady(function () {
           else if (ev.type === 'search_query'         && ev.query)   queries.push(ev.query);
           else if (ev.type === 'result_click'         && ev.url)     clicks.push(ev);
           else if (ev.type === 'result_dwell'         && ev.url)     dwells.push(ev);
+          // Only the initial-draft Judge result is mirrored to per-turn
+          // fields. Judgements on regenerated responses (is_regen_score
+          // === true) stay in the InteractionLog JSON for analyst use
+          // but don't compete for a flat-field slot.
+          else if (ev.type === 'judge_result'         && !ev.is_regen_score) judgements.push(ev);
         }
 
         // Per-turn fields — overwrite each one, and clear any that no
@@ -82,14 +95,25 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         for (var k = 1; k <= MAX_TURNS; k++) {
           var c = clicks[k-1];
           var d = dwells[k-1];
-          Q.setEmbeddedData('prompt_'             + k, prompts[k-1]   || '');
-          Q.setEmbeddedData('response_'           + k, responses[k-1] || '');
-          Q.setEmbeddedData('search_query_'       + k, queries[k-1]   || '');
-          Q.setEmbeddedData('search_click_'       + k, c ? (c.url   || '') : '');
-          Q.setEmbeddedData('search_click_title_' + k, c ? (c.title || '') : '');
-          Q.setEmbeddedData('search_click_query_' + k, c ? (c.query || '') : '');
-          Q.setEmbeddedData('search_click_index_' + k, c ? String(c.index != null ? c.index : '') : '');
-          Q.setEmbeddedData('search_dwell_ms_'    + k, d && d.dwell_ms != null ? String(d.dwell_ms) : '');
+          var j = judgements[k-1];
+          Q.setEmbeddedData('prompt_'                   + k, prompts[k-1]   || '');
+          Q.setEmbeddedData('response_'                 + k, responses[k-1] || '');
+          Q.setEmbeddedData('search_query_'             + k, queries[k-1]   || '');
+          Q.setEmbeddedData('search_click_'             + k, c ? (c.url   || '') : '');
+          Q.setEmbeddedData('search_click_title_'       + k, c ? (c.title || '') : '');
+          Q.setEmbeddedData('search_click_query_'       + k, c ? (c.query || '') : '');
+          Q.setEmbeddedData('search_click_index_'       + k, c ? String(c.index != null ? c.index : '') : '');
+          Q.setEmbeddedData('search_dwell_ms_'          + k, d && d.dwell_ms != null ? String(d.dwell_ms) : '');
+          // Judge per-turn fields (Socratic arm). Empty when no judge
+          // event for this turn yet (e.g. judge call still in flight in
+          // passive mode, or non-Socratic arm).
+          Q.setEmbeddedData('judge_fidelity_'           + k, j && j.fidelity_score != null ? String(j.fidelity_score) : '');
+          Q.setEmbeddedData('judge_intent_'             + k, j && j.intent_score   != null ? String(j.intent_score)   : '');
+          Q.setEmbeddedData('judge_fidelity_reasoning_' + k, j ? String(j.fidelity_reasoning || '').slice(0, 300) : '');
+          Q.setEmbeddedData('judge_intent_reasoning_'   + k, j ? String(j.intent_reasoning   || '').slice(0, 300) : '');
+          Q.setEmbeddedData('judge_status_'             + k, j ? (j.judge_status || '') : '');
+          Q.setEmbeddedData('judge_latency_ms_'         + k, j && j.judge_latency_ms != null ? String(j.judge_latency_ms) : '');
+          Q.setEmbeddedData('judge_active_regen_'       + k, j ? String(!!j.active_regen_triggered) : '');
         }
 
         // Last-turn convenience fields.
@@ -111,6 +135,24 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('total_dwell_ms', String(totalDwell));
         Q.setEmbeddedData('query_count',    String(log.query_count || 0));
         Q.setEmbeddedData('click_count',    String(log.click_count || 0));
+
+        // Judge aggregates for the Socratic arm. Computed only over OK
+        // judgements; failures are still counted in judge_failure_count
+        // (set by the embed and mirrored above). When there are no OK
+        // judgements yet, mins/avgs are written as the empty string
+        // rather than zero (so analysts can distinguish "no data" from
+        // "all turns scored zero").
+        var okJudgements = judgements.filter(function (x) { return x.judge_status === 'ok' && typeof x.fidelity_score === 'number'; });
+        var fidelitySum  = okJudgements.reduce(function (s, x) { return s + x.fidelity_score; }, 0);
+        var fidelityMin  = okJudgements.reduce(function (m, x) { return m == null || x.fidelity_score < m ? x.fidelity_score : m; }, null);
+        var belowThreshold = okJudgements.filter(function (x) { return x.fidelity_score < 3; }).length;
+        var extractionAttempts = okJudgements.filter(function (x) { return x.intent_score === 1 || x.intent_score === 2; }).length;
+        var totalJudgeLatency  = judgements.reduce(function (s, x) { return s + (x.judge_latency_ms || 0); }, 0);
+        Q.setEmbeddedData('judge_avg_fidelity',             okJudgements.length ? String((fidelitySum / okJudgements.length).toFixed(2)) : '');
+        Q.setEmbeddedData('judge_min_fidelity',             fidelityMin != null ? String(fidelityMin) : '');
+        Q.setEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
+        Q.setEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
+        Q.setEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
       } catch (e) {
         console.warn('[RCT bridge] setEmbeddedData failed:', e);
       }

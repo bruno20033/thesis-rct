@@ -1,12 +1,19 @@
 /**
  * Cloudflare Worker — proxy for the RCT Treatment Embed.
  *
- * Two routes, same Worker:
+ * Three routes, same Worker:
  *   POST /  or  POST /llm     → forwards to OpenRouter chat completions
- *                               with the secret OPENROUTER_API_KEY.
+ *                               with the secret OPENROUTER_API_KEY (the
+ *                               participant-facing generator).
  *   POST /search              → server-side scrape of DuckDuckGo's HTML
  *                               results page, parsed into JSON. No API
  *                               key, no signup, no quota.
+ *   POST /judge               → forwards to OpenRouter with the secret
+ *                               OPENROUTER_JUDGE_API_KEY for the LLM-as-
+ *                               Judge fidelity layer (Socratic arm only).
+ *                               The Judge model is supplied per request
+ *                               in the `model` body field, so the Judge
+ *                               provider can be swapped without re-deploy.
  *
  * History: the SEARCH route originally targeted Google Programmable
  * Search (Google removed "search the entire web" for new engines in
@@ -16,30 +23,40 @@
  * browser-facing response shape is unchanged across all backends:
  *   {items: [{title, url, displayUrl, snippet}], total}
  *
- * Both routes share the same Origin allowlist + CORS headers + JSON
- * helpers so the participant's browser only sees Worker URLs and never
- * a third-party API key.
+ * All three routes share the same Origin allowlist + CORS headers +
+ * JSON helpers so the participant's browser only sees Worker URLs and
+ * never a third-party API key.
  *
  * Required env vars (Workers & Pages → your worker → Settings →
  *   Variables and Secrets):
  *
- *   OPENROUTER_API_KEY      Secret    Real OpenRouter key.
- *   ALLOWED_ORIGINS         Text      Comma-separated origins. Example:
+ *   OPENROUTER_API_KEY        Secret  Generator OpenRouter key.
+ *   OPENROUTER_JUDGE_API_KEY  Secret  Judge OpenRouter key. May be set
+ *                                      to the same value as the
+ *                                      generator key, but separate so
+ *                                      spend / rotation can be tracked
+ *                                      independently. If unset, the
+ *                                      Worker falls back to
+ *                                      OPENROUTER_API_KEY for /judge.
+ *   ALLOWED_ORIGINS           Text    Comma-separated origins. Example:
  *                                      https://bruno20033.github.io,
  *                                      https://oii.eu.qualtrics.com
  *
  *   (No SEARCH_* secret is required — DuckDuckGo needs none.)
  *
  * Optional:
- *   HTTP_REFERER            Text      Sent to OpenRouter for attribution.
- *   X_TITLE                 Text      Sent to OpenRouter for attribution.
- *   MAX_TOKENS              Text      Hard cap on max_tokens (default 1024).
- *   SEARCH_NUM_RESULTS      Text      Max results per search query (1-30,
- *                                      default 10).
- *   SEARCH_REGION           Text      DDG region code, default 'wt-wt'
+ *   HTTP_REFERER              Text    Sent to OpenRouter for attribution.
+ *   X_TITLE                   Text    Sent to OpenRouter for attribution.
+ *   MAX_TOKENS                Text    Hard cap on max_tokens for /llm
+ *                                      (default 1024).
+ *   JUDGE_MAX_TOKENS          Text    Hard cap on max_tokens for /judge
+ *                                      (default 400 — short JSON only).
+ *   SEARCH_NUM_RESULTS        Text    Max results per search query
+ *                                      (1-30, default 10).
+ *   SEARCH_REGION             Text    DDG region code, default 'wt-wt'
  *                                      (no region). Examples: 'us-en',
  *                                      'uk-en', 'de-de'.
- *   SEARCH_SAFESEARCH       Text      'off' | 'moderate' | 'strict'
+ *   SEARCH_SAFESEARCH         Text    'off' | 'moderate' | 'strict'
  *                                      (default 'moderate').
  */
 
@@ -153,6 +170,64 @@ export default {
           'Content-Type': 'application/json',
           'HTTP-Referer': env.HTTP_REFERER || 'https://thesis-rct.example',
           'X-Title':      env.X_TITLE      || 'RCT Chart Study',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const text = await upstream.text();
+      return new Response(text, {
+        status: upstream.status,
+        headers: {
+          ...cors(request, env),
+          'Content-Type': 'application/json',
+        },
+      });
+    }
+
+    // ---------------------------------------------------------------
+    // JUDGE route (POST /judge) → OpenRouter chat completions for the
+    // LLM-as-Judge fidelity layer. Same shape as /llm but uses a
+    // separate API key (OPENROUTER_JUDGE_API_KEY, falling back to
+    // OPENROUTER_API_KEY) and a tighter max-tokens cap. The Judge
+    // model is supplied per request so the Judge provider can be
+    // swapped without re-deploying the worker.
+    // ---------------------------------------------------------------
+    if (url.pathname === '/judge') {
+      if (request.method !== 'POST') {
+        return json({ error: 'Method Not Allowed' }, 405, request, env);
+      }
+      const judgeKey = env.OPENROUTER_JUDGE_API_KEY || env.OPENROUTER_API_KEY;
+      if (!judgeKey) {
+        return json({ error: 'Worker misconfigured: OPENROUTER_JUDGE_API_KEY (or OPENROUTER_API_KEY fallback) not set' }, 500, request, env);
+      }
+
+      let payload;
+      try { payload = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400, request, env); }
+      if (!payload || !Array.isArray(payload.messages)) {
+        return json({ error: 'Body must contain a messages array' }, 400, request, env);
+      }
+      if (!payload.model || typeof payload.model !== 'string') {
+        return json({ error: 'Body must specify a `model` string (Judge model id)' }, 400, request, env);
+      }
+
+      // Hard cap on Judge max_tokens — Judge response is short JSON.
+      const judgeMaxTokens = Number(env.JUDGE_MAX_TOKENS || 400);
+      if (!payload.max_tokens || payload.max_tokens > judgeMaxTokens) {
+        payload.max_tokens = judgeMaxTokens;
+      }
+      // Force determinism floor for the Judge — caller can still pick
+      // anything up to 0.3, but we never let it exceed 0.3 here.
+      if (typeof payload.temperature !== 'number' || payload.temperature > 0.3) {
+        payload.temperature = 0.1;
+      }
+
+      const upstream = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + judgeKey,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': env.HTTP_REFERER || 'https://thesis-rct.example',
+          'X-Title':      (env.X_TITLE || 'RCT Chart Study') + ' (Judge)',
         },
         body: JSON.stringify(payload),
       });

@@ -17,12 +17,14 @@ The two are mutually exclusive per question. The iframe section below is the ori
 
 | File | Role |
 |---|---|
-| `embed.html` | The whole experimental app — single self-contained page. **This is what gets deployed.** Reads `?condition=`, `?pid=`, `?model=` from its URL. |
-| `qualtrics-llm.html` | One-line `<iframe>` snippet to paste into the LLM-branch question. |
-| `qualtrics-search.html` | One-line `<iframe>` snippet to paste into the SEARCH-branch question. |
-| `qualtrics-question-js.js` | Qualtrics-side bridge — paste into both questions' JS panels. Listens for postMessage from the iframe and writes to Embedded Data, shows the Next button, and resizes the iframe. |
+| `embed.html` | The whole experimental app — single self-contained page. **This is what gets deployed.** Reads `?condition=`, `?arm=`, `?pid=`, `?model=` from its URL. Holds two arm system prompts (Socratic, Unrestricted), the Judge prompt, the Judge orchestration, and all UI. |
+| `qualtrics-llm.html` | One-line `<iframe>` snippet to paste into the LLM-branch question (the same iframe serves both Socratic and Unrestricted arms; the `arm` param is filled from Embedded Data). |
+| `qualtrics-search.html` | One-line `<iframe>` snippet to paste into the SEARCH-branch question (the Google-only control arm). |
+| `qualtrics-question-js.js` | Qualtrics-side bridge — paste into both questions' JS panels. Listens for postMessage from the iframe and writes to Embedded Data (chat, search, and Judge fields), shows the Next button, and resizes the iframe. |
 | `index-llm.html`, `index-search.html` | Local "Qualtrics simulator" pages. Iframe-embed `embed.html`, mimic the postMessage bridge so you can test exactly the production flow without deploying. |
-| `worker.js` | Cloudflare Worker that holds the OpenRouter API key as a server-side secret and proxies chat requests. **Deploy this so the key never ships in `embed.html`.** See [Backend proxy setup](#backend-proxy-setup-cloudflare-worker) below. |
+| `worker.js` | Cloudflare Worker that holds OpenRouter API keys as server-side secrets and proxies three routes: `POST /llm` (generator), `POST /search` (DDG), and `POST /judge` (LLM-as-Judge fidelity layer). **Deploy this so the keys never ship in `embed.html`.** See [Backend proxy setup](#backend-proxy-setup-cloudflare-worker) below. |
+| `rct_arm_prompts.md` | Canonical, version-controlled copies of the two LLM-arm system prompts (Socratic, Unrestricted). Mirror into `embed.html` JS literals before deploying. |
+| `rct_judge_prompts.md` | Canonical Judge system prompt + synthetic calibration corpus + calibration log. Mirror into `embed.html`'s `RCT_JUDGE_SYSTEM_PROMPT` literal before deploying. |
 | `README.md` | This file. |
 
 ## Communication contract (iframe → parent)
@@ -86,11 +88,22 @@ Whichever you pick, **note the URL of `embed.html`**. You'll paste it into the i
 
 ## 3. Qualtrics Survey Flow
 
-Add an **Embedded Data** element at the top with these field names (leave values blank — the bridge fills them):
+The study has **three arms**, randomised between-subjects:
+
+| Arm | URL parameters | What participants see |
+|---|---|---|
+| **Google-only (control)** | `?condition=SEARCH` | Real DuckDuckGo-backed web search panel; chart + question on the left. No LLM. |
+| **Socratic LLM (treatment)** | `?condition=LLM&arm=socratic` | LLM chat with a probe-only system prompt; an LLM-as-Judge layer scores every turn for scaffold fidelity in the background (passive mode). |
+| **Unrestricted LLM (treatment)** | `?condition=LLM&arm=unrestricted` | LLM chat with a generally-helpful system prompt. No Judge layer. |
+
+If `arm` is missing on the LLM condition, the embed defaults to `unrestricted` for backward compatibility with the pre-arm URL shape.
+
+Add an **Embedded Data** element at the top of Survey Flow with these field names (leave values blank — the bridge fills them):
 
 ```
 # core identification
 condition
+arm
 participant_id
 session_id
 model_used
@@ -123,17 +136,48 @@ search_click_title_1 ... search_click_title_20
 search_click_query_1 ... search_click_query_20
 search_click_index_1 ... search_click_index_20
 search_dwell_ms_1 ... search_dwell_ms_20
+
+# Socratic-arm Judge fields (empty for other arms)
+judge_model
+judge_mode
+judge_call_count
+judge_failure_count
+judge_avg_fidelity
+judge_min_fidelity
+judge_below_threshold_count
+judge_extraction_attempt_count
+judge_total_latency_ms
+judge_fidelity_1 judge_fidelity_2 ... judge_fidelity_20
+judge_intent_1 judge_intent_2 ... judge_intent_20
+judge_fidelity_reasoning_1 ... judge_fidelity_reasoning_20
+judge_intent_reasoning_1 ... judge_intent_reasoning_20
+judge_status_1 ... judge_status_20
+judge_latency_ms_1 ... judge_latency_ms_20
+judge_active_regen_1 ... judge_active_regen_20
 ```
 
 The `prompt_N` / `response_N` / `search_query_N` fields capture each turn separately so analysts can read prompts and AI replies directly from the CSV. Up to 20 turns are written; if a participant has fewer, the remaining fields stay empty. The full conversation is also concatenated into `all_prompts`, `all_responses`, and `all_search_queries` (separated by `\n---\n`). The complete event log with timestamps and latencies remains in `InteractionLog` (stringified JSON) for full-fidelity analysis.
 
 `prompt_count` counts user prompts SENT (regardless of whether the AI replied successfully). `response_count` counts successful AI replies / search results shown.
 
-Add a **Randomizer** that evenly assigns each participant to one of two branches:
-- Branch A — sets `condition = LLM`, then shows the LLM question.
-- Branch B — sets `condition = SEARCH`, then shows the SEARCH question.
+`judge_fidelity_N` (1–5) and `judge_intent_N` (1–4) are the Socratic-arm Judge scores per turn, defined in [rct_judge_prompts.md](rct_judge_prompts.md). `judge_status_N` is `ok` / `parse_error` / `api_error` / `timeout`. `judge_active_regen_N` is `true`/`false` indicating whether active mode triggered a silent regeneration on that turn (always `false` in passive mode). Aggregates: `judge_avg_fidelity` (mean over OK turns), `judge_min_fidelity`, `judge_below_threshold_count` (turns where fidelity < 3), `judge_extraction_attempt_count` (turns where intent ∈ {1, 2}). Empty for non-Socratic arms.
 
-(You can also use Display Logic on the questions instead.)
+Add a **Randomizer** that evenly assigns each participant to **one of three branches**:
+
+```
+Randomizer (Evenly Present Elements: ☑)
+├─ Branch 1 (Google-only, control)
+│   ├─ Set Embedded Data: condition = SEARCH
+│   └─ Block: SEARCH question
+├─ Branch 2 (Socratic LLM)
+│   ├─ Set Embedded Data: condition = LLM, arm = socratic
+│   └─ Block: LLM question (Socratic)
+└─ Branch 3 (Unrestricted LLM)
+    ├─ Set Embedded Data: condition = LLM, arm = unrestricted
+    └─ Block: LLM question (Unrestricted)
+```
+
+The two LLM-condition blocks can use the **same Qualtrics question** (and the same iframe `src` template), differing only by their Embedded-Data-set step setting `arm` differently. The Randomizer's branch boundary is what selects the system prompt for each participant.
 
 ## 4. The two Qualtrics questions
 
@@ -141,11 +185,11 @@ Create two **Text Entry** questions, one per branch.
 
 ### LLM question
 
-**Question Text** (rich-text editor → Source view, paste the line below; replace `EMBED_URL` with your hosted URL from step 2):
+**Question Text** (rich-text editor → Source view, paste the line below; replace `EMBED_URL` with your hosted URL from step 2). The `arm` parameter is read from Embedded Data so the same question can serve both LLM arms — the Randomizer determines which `arm` each participant gets:
 
 ```html
 <iframe
-  src="https://yourname.github.io/thesis/embed.html?condition=LLM&pid=${e://Field/ResponseID}"
+  src="https://yourname.github.io/thesis/embed.html?condition=LLM&arm=${e://Field/arm}&pid=${e://Field/ResponseID}"
   width="100%" height="800" frameborder="0"
   style="border:none; display:block; width:100%; min-height:700px;"
   allow="clipboard-write"
@@ -291,8 +335,9 @@ The worker now holds the key; no further key handling is needed in your repo.
 
 The Worker exposes two routes under one origin-locked CORS policy:
 
-- **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY`. `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
+- **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY` (the participant-facing generator). `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
 - **`POST /search`** — server-side scrape of DuckDuckGo's HTML results page, parsed into JSON. **No API key, no signup, no quota cap.** Returns up to 30 `{title, url, displayUrl, snippet}` items. Sponsored ads are filtered out. (We tried Google Programmable Search first — Google removed "search the entire web" for new engines in 2024 — and Brave Search next — their free tier requires a billing card. DuckDuckGo's HTML page is the best card-free option.)
+- **`POST /judge`** — forwards to OpenRouter with the **separate** secret `OPENROUTER_JUDGE_API_KEY` for the LLM-as-Judge fidelity layer (Socratic arm only). Judge model id is supplied per request in the `model` body field, so the Judge provider can be swapped without redeploying. `max_tokens` is clamped to `JUDGE_MAX_TOKENS` (default 400). `temperature` is clamped to ≤ 0.3 (forced to 0.1 if higher) so Judge grading stays near-deterministic.
 
 Cross-cutting:
 - **Origin allowlist** — every request is checked against `ALLOWED_ORIGINS`. Off-list requests get `403 Forbidden origin`.
@@ -343,6 +388,67 @@ Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet
 - DDG's HTML structure (`result__a`, `result__snippet` class names) has been stable for years; the parser is also forgiving (a small markup tweak won't silently zero out results — the parser would simply return fewer entries and the UI would show what it got).
 - If DDG ever serves the "anomaly" page (their bot challenge), the Worker surfaces a `429` instead of returning empty results, so the embed's retry loop kicks in (2 retries with back-off, then a clean `error` event).
 - For thesis-scale (a few hundred queries/day) DDG won't throttle. If you ever need to scale to thousands of queries/day, switch the backend to Brave (with a billing card) or self-host SearXNG — the Worker code change is small (one upstream fetch).
+
+## LLM-as-Judge fidelity layer (Socratic arm only)
+
+The Socratic arm has known scaffold-failure modes — direct or oblique solution extraction by the participant, model drift toward helpful-assistant mode, jailbreaks, and gaming. To detect and quantify these, every Socratic-arm turn is silently scored by a **second LLM** (the Judge) on two rubrics:
+
+- **`fidelity_score` (1–5):** SOLO-style rubric measuring whether the assistant message stayed within the Socratic boundary (passing threshold = 3 / Relational).
+- **`intent_score` (1–4):** taxonomy of participant intent — direct extraction / oblique extraction / legitimate clarification / legitimate conceptual inquiry. Intent scores 1 and 2 flag the turn for analyst review (no participant-facing intervention).
+
+Both scores are returned in **one** Judge round-trip per turn. Architecture is adapted from VibeCheck (Sankaranarayanan, 2026, [arXiv:2602.20206v2](https://arxiv.org/abs/2602.20206)) — the design intent transfers (cross-family Judge, SOLO rubric, prompt-injection hardening), the IDE-coupled mechanics (Apply-button gate, file-system watcher) are dropped because there's no IDE in a Qualtrics chat widget.
+
+### How to swap the Judge model
+
+One config constant in [embed.html](embed.html):
+```js
+var RCT_JUDGE_MODEL = 'anthropic/claude-haiku-4-5';   // any OpenRouter model id
+```
+The Worker forwards whatever `model` the embed sends, so swapping the Judge is one constant + one redeploy of `embed.html`. **Cross-family rule:** if you change the generator family, also change the Judge model so they're from different providers (Wataoka et al. 2024 self-preference bias). The default mapping (OpenAI generator → Anthropic Judge) handles this automatically; if you switch the generator to Claude, change the Judge to GPT or Gemini.
+
+### How to toggle passive vs active mode
+
+```js
+var RCT_JUDGE_MODE = 'passive';   // 'passive' | 'active' | 'off'
+```
+
+| Mode | Behaviour | Recommended when |
+|---|---|---|
+| **`passive`** | Judge fires after the assistant message renders, **fire-and-forget**. Scores backfill `InteractionLog` and the per-turn flat fields a few seconds later. Participant never sees the Judge or any extra latency. | **Default for the main trial.** Measures the Socratic treatment as actually delivered, including its failure modes. |
+| **`active`** | Judge fires **before** the assistant message renders. If `fidelity_score < RCT_JUDGE_THRESHOLD`, the response is silently regenerated with a stronger system-prompt reinforcement and the regen is shown instead. The participant never sees the rejected draft. | **Pilot only.** Adds 2–5s of latency per turn; modifies the treatment delivery mid-flight (which is OK for pilot, contaminating for the main trial). |
+| **`off`** | Judge disabled. | Sanity-check runs, or if you ever want to ship the Socratic arm without judging. |
+
+Active mode does **one** regen attempt per turn. If the regen also fails the Judge it's served anyway — the participant never gets a loading spinner and the Judge never blocks delivery. Failure is logged via `judge_active_regen_N = true` plus `active_regen_succeeded` inside the `judge_result` event in `InteractionLog`.
+
+### Worker secret
+
+`OPENROUTER_JUDGE_API_KEY` (Type: **Secret**) on the Cloudflare Worker. May be set to the same value as `OPENROUTER_API_KEY` (the generator key) for simplicity, but a separate key is **strongly recommended** so spend monitoring and rotation on the Judge channel are independent of the generator's. If the Judge key is unset, the Worker falls back to `OPENROUTER_API_KEY` so the route still works during initial setup.
+
+### Reading Judge data out of Qualtrics for analysis
+
+Per-turn flat fields (1..20) appear directly as CSV columns:
+
+| Field | Type | Notes |
+|---|---|---|
+| `judge_fidelity_N` | int 1–5 | empty if turn N hasn't been judged yet |
+| `judge_intent_N` | int 1–4 | |
+| `judge_fidelity_reasoning_N` | string ≤ 300 chars | preview; full text in `InteractionLog` JSON |
+| `judge_intent_reasoning_N` | string ≤ 300 chars | |
+| `judge_status_N` | enum | `ok` / `parse_error` / `api_error` / `timeout` / `''` (no call) |
+| `judge_latency_ms_N` | int | wall-clock from Judge fetch dispatch to JSON parse |
+| `judge_active_regen_N` | bool string | `true` iff active mode triggered a regen on this turn |
+
+Session aggregates:
+- `judge_avg_fidelity` (mean over OK turns)
+- `judge_min_fidelity`
+- `judge_below_threshold_count` (turns where fidelity < 3)
+- `judge_extraction_attempt_count` (turns where intent ∈ {1, 2})
+- `judge_call_count`, `judge_failure_count`, `judge_total_latency_ms`
+- `judge_model`, `judge_mode` (recorded once for the session)
+
+For full per-event reasoning, parse the `InteractionLog` column as JSON and filter for `events[].type === 'judge_result'`. Each judge_result event also carries `is_regen_score` (true on second-pass scoring of regenerated responses in active mode), `active_regen_triggered`, `active_regen_succeeded`, and `raw_response_truncated` (set only when the Judge returned unparseable JSON).
+
+The full Judge prompt and calibration corpus live in [rct_judge_prompts.md](rct_judge_prompts.md). The two arm system prompts live in [rct_arm_prompts.md](rct_arm_prompts.md). Both are documentation files; runtime copies are JS string literals in `embed.html`.
 
 ## Refresh resilience
 
