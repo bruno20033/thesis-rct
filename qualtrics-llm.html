@@ -1,23 +1,28 @@
 <!--
   LLM-CONDITION QUALTRICS QUESTION TEXT
   ====================================================================
-  After deploying embed.html (see README), replace EMBED_URL below with
-  your hosted URL (e.g. https://yourname.github.io/thesis/embed.html).
-  Then paste the single <iframe> line into the question's Question Text
-  via the rich-text editor → Source view (the <> button). Do NOT paste
-  this comment.
+  Paste the single <iframe> line below into the LLM Text Entry
+  question's Question Text via the rich-text editor → Source view
+  (the <> button). Do NOT paste this comment.
 
-  ${e://Field/ResponseID} is a Qualtrics piped-text expression that
-  inserts the participant's response ID, so each chat session is keyed
-  to that participant in your data.
+  This same question serves BOTH LLM arms — Socratic and Unrestricted.
+  The Survey Flow Randomizer sets the `arm` Embedded Data field per
+  branch (e.g. `arm = socratic` on Branch 2, `arm = unrestricted` on
+  Branch 3); the iframe pipes that value into the embed via the
+  ${e://Field/arm} expression.
 
-  The companion script in qualtrics-question-js.js (paste into the
-  question's JavaScript panel) listens for postMessage events from the
-  iframe and writes them to Qualtrics Embedded Data.
+  Piped-text expressions used:
+    ${e://Field/arm}         → 'socratic' or 'unrestricted', set by
+                                the Randomizer's Embedded-Data step.
+    ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
+                                id for this response.
+
+  Companion JS in qualtrics-question-js.js handles the postMessage
+  bridge from the iframe to Qualtrics Embedded Data.
   ====================================================================
 -->
 <iframe
-  src="EMBED_URL?condition=LLM&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=LLM&arm=${e://Field/arm}&pid=${e://Field/ResponseID}"
   width="100%"
   height="800"
   frameborder="0"

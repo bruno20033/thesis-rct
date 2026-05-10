@@ -1,17 +1,25 @@
 <!--
-  SEARCH-CONDITION QUALTRICS QUESTION TEXT
+  SEARCH-CONDITION QUALTRICS QUESTION TEXT (Google-only control arm)
   ====================================================================
-  After deploying embed.html (see README), replace EMBED_URL below with
-  your hosted URL. Paste the single <iframe> line into the question's
-  Question Text via the rich-text editor → Source view (the <> button).
-  Do NOT paste this comment.
+  Paste the single <iframe> line below into the SEARCH Text Entry
+  question's Question Text via the rich-text editor → Source view
+  (the <> button). Do NOT paste this comment.
 
-  Companion script: qualtrics-question-js.js (paste into the question's
-  JavaScript panel).
+  Piped-text expressions used:
+    ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
+                                id for this response. Used by the
+                                embed as the `pid` query param so all
+                                interactions are scoped per participant.
+
+  No `arm` parameter is needed — the SEARCH condition is the Google-
+  only control and has no Socratic/Unrestricted variants.
+
+  Companion JS in qualtrics-question-js.js handles the postMessage
+  bridge from the iframe to Qualtrics Embedded Data.
   ====================================================================
 -->
 <iframe
-  src="EMBED_URL?condition=SEARCH&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=SEARCH&pid=${e://Field/ResponseID}"
   width="100%"
   height="800"
   frameborder="0"
