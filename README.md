@@ -21,7 +21,6 @@ The two are mutually exclusive per question. The iframe section below is the ori
 | `qualtrics-llm.html` | One-line `<iframe>` snippet to paste into the LLM-branch question (the same iframe serves both Socratic and Unrestricted arms; the `arm` param is filled from Embedded Data). |
 | `qualtrics-search.html` | One-line `<iframe>` snippet to paste into the SEARCH-branch question (the Google-only control arm). |
 | `qualtrics-question-js.js` | Qualtrics-side bridge — paste into both questions' JS panels. Listens for postMessage from the iframe and writes to Embedded Data (chat, search, and Judge fields), shows the Next button, and resizes the iframe. |
-| `index-llm.html`, `index-search.html` | Local "Qualtrics simulator" pages. Iframe-embed `embed.html`, mimic the postMessage bridge so you can test exactly the production flow without deploying. |
 | `worker.js` | Cloudflare Worker that holds OpenRouter API keys as server-side secrets and proxies three routes: `POST /llm` (generator), `POST /search` (DDG), and `POST /judge` (LLM-as-Judge fidelity layer). **Deploy this so the keys never ship in `embed.html`.** See [Backend proxy setup](#backend-proxy-setup-cloudflare-worker) below. |
 | `rct_arm_prompts.md` | Canonical, version-controlled copies of the two LLM-arm system prompts (Socratic, Unrestricted). Mirror into `embed.html` JS literals before deploying. |
 | `rct_judge_prompts.md` | Canonical Judge system prompt + synthetic calibration corpus + calibration log. Mirror into `embed.html`'s `RCT_JUDGE_SYSTEM_PROMPT` literal before deploying. |
@@ -50,23 +49,7 @@ The iframe posts these messages to `window.parent`:
 6. Test in Qualtrics preview
 ```
 
-## 1. Local development
-
-Serve the directory with any static server:
-
-```bash
-python3 -m http.server 8765
-```
-
-Open:
-- `http://localhost:8765/index-llm.html` — simulates the Qualtrics page hosting the LLM iframe.
-- `http://localhost:8765/index-search.html` — simulates the SEARCH page.
-
-Each simulator page has a dark top bar showing the synthetic participant id, a "Next ›" button that appears when the iframe sends `rct_complete`, and a panel below the iframe that prints every postMessage so you can debug.
-
-To use the LLM with a real model, edit `embed.html` and replace `YOUR_KEY_HERE` with an OpenRouter key. Revert before deploying publicly. See [Security](#security-api-key-handling) below.
-
-## 2. Deploying `embed.html`
+## 1. Deploying `embed.html`
 
 You need a public HTTPS URL that serves `embed.html`. Easiest options for a thesis:
 
@@ -86,7 +69,7 @@ Drag the project folder onto [app.netlify.com/drop](https://app.netlify.com/drop
 
 Whichever you pick, **note the URL of `embed.html`**. You'll paste it into the iframe in step 4.
 
-## 3. Qualtrics Survey Flow
+## 2. Qualtrics Survey Flow
 
 The study has **three arms**, randomised between-subjects:
 
@@ -179,7 +162,7 @@ Randomizer (Evenly Present Elements: ☑)
 
 The two LLM-condition blocks can use the **same Qualtrics question** (and the same iframe `src` template), differing only by their Embedded-Data-set step setting `arm` differently. The Randomizer's branch boundary is what selects the system prompt for each participant.
 
-## 4. The two Qualtrics questions
+## 3. The two Qualtrics questions
 
 Create two **Text Entry** questions, one per branch.
 
@@ -205,7 +188,7 @@ Same as LLM but with `condition=SEARCH` in the iframe URL.
 
 `${e://Field/ResponseID}` is Qualtrics piped text — it inserts the participant's response ID as the `pid` query parameter, so the iframe storage and the embedded log stay tied to that participant.
 
-## 5. Test in Qualtrics
+## 4. Test in Qualtrics
 
 Open the survey **Preview**. Open browser DevTools → Console. You should see:
 
