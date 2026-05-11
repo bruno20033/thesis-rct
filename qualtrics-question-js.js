@@ -38,6 +38,12 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       var Q = Qualtrics.SurveyEngine;
       try {
         Q.setEmbeddedData('InteractionLog', JSON.stringify(log));
+        // Analyst-friendly per-condition dictionary view (see README §
+        // "interaction_log dictionary schema" for the exact shape).
+        // Written alongside the rich InteractionLog JSON so analysts can
+        // read prompts → responses (or queries → click lists) straight
+        // out of CSV export without parsing the events array.
+        Q.setEmbeddedData('interaction_log', JSON.stringify(buildInteractionLogDict(log)));
         Q.setEmbeddedData('condition',       log.condition || '');
         Q.setEmbeddedData('participant_id',  log.participant_id || '');
         Q.setEmbeddedData('model_used',      log.model_used || '');
@@ -180,6 +186,131 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         iframes[i].style.height = h + 'px';
       }
     }
+  }
+
+  /* =====================================================================
+   * buildInteractionLogDict — analyst-friendly per-condition view.
+   *
+   * Returns a plain object whose schema depends on condition + arm. The
+   * canonical schema is documented in README § "interaction_log
+   * dictionary schema". Briefly:
+   *
+   *   SEARCH:
+   *     { "<search term>": ["<clicked url>", "<clicked url>", ...], ... }
+   *   LLM + unrestricted:
+   *     { "<participant prompt>": [<feature_used 0|1>, "<llm response>"], ... }
+   *     feature_used = 1 iff the participant clicked "Share chart" for
+   *     the current question BEFORE this prompt was sent.
+   *   LLM + socratic:
+   *     { "<participant prompt>": {
+   *         response: "<llm response>",
+   *         judge_fidelity_score: <int 1-5 | null>,
+   *         judge_fidelity_reasoning: "...",
+   *         judge_intent_score: <int 1-4 | null>,
+   *         judge_intent_reasoning: "...",
+   *         judge_status: "ok" | "timeout" | "parse_error" | "api_error" | ...,
+   *         judge_latency_ms: <int | null>
+   *       }, ... }
+   *
+   * Duplicate keys (same prompt or same search query twice) collapse to
+   * the LAST occurrence — that's JSON-object semantics. For SEARCH,
+   * clicks across repeated queries accumulate into the same list. For
+   * the LLM arms, the rich InteractionLog event array preserves every
+   * turn losslessly.
+   * =================================================================== */
+  function buildInteractionLogDict(log) {
+    if (!log || !log.events) return {};
+    var condition = log.condition || '';
+    var arm = log.arm || '';
+    var events = log.events;
+
+    if (condition === 'SEARCH') {
+      var searchDict = {};
+      var currentQuery = null;
+      for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (e.type === 'search_query' && e.query) {
+          currentQuery = String(e.query);
+          if (!Object.prototype.hasOwnProperty.call(searchDict, currentQuery)) {
+            searchDict[currentQuery] = [];
+          }
+        } else if (e.type === 'result_click' && e.url && currentQuery) {
+          searchDict[currentQuery].push(String(e.url));
+        }
+      }
+      return searchDict;
+    }
+
+    if (condition === 'LLM' && arm === 'unrestricted') {
+      var unrDict = {};
+      var sharedByQid = {};
+      var pendingPrompt = null;
+      var pendingFeatureUsed = 0;
+      for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (e.type === 'context_share' && e.question_id) {
+          sharedByQid[e.question_id] = true;
+        } else if (e.type === 'prompt' && typeof e.content === 'string') {
+          pendingPrompt = e.content;
+          pendingFeatureUsed = (e.question_id && sharedByQid[e.question_id]) ? 1 : 0;
+        } else if (e.type === 'response' && pendingPrompt !== null && typeof e.content === 'string') {
+          unrDict[pendingPrompt] = [pendingFeatureUsed, e.content];
+          pendingPrompt = null;
+        }
+      }
+      return unrDict;
+    }
+
+    if (condition === 'LLM' && arm === 'socratic') {
+      // Walk events, build turn list keyed by turn_index so judge_result
+      // events (which can arrive interleaved due to passive-mode async)
+      // attach to the correct prompt.
+      var turns = [];                  // ordered for output
+      var byTurnIndex = {};            // 1-based turn_index → turn record
+      var promptOrdinal = 0;
+      for (var i = 0; i < events.length; i++) {
+        var e = events[i];
+        if (e.type === 'prompt' && typeof e.content === 'string') {
+          promptOrdinal += 1;
+          var rec = { prompt: e.content, response: '', judge: null };
+          turns.push(rec);
+          byTurnIndex[promptOrdinal] = rec;
+        } else if (e.type === 'response' && typeof e.content === 'string') {
+          // Attach to the most recent prompt that lacks a response.
+          for (var j = turns.length - 1; j >= 0; j--) {
+            if (!turns[j].response) { turns[j].response = e.content; break; }
+          }
+        } else if (e.type === 'judge_result' && !e.is_regen_score && e.turn_index) {
+          var tr = byTurnIndex[e.turn_index];
+          if (tr) {
+            tr.judge = {
+              fidelity_score:     e.fidelity_score     != null ? e.fidelity_score     : null,
+              fidelity_reasoning: e.fidelity_reasoning != null ? e.fidelity_reasoning : '',
+              intent_score:       e.intent_score       != null ? e.intent_score       : null,
+              intent_reasoning:   e.intent_reasoning   != null ? e.intent_reasoning   : '',
+              judge_status:       e.judge_status       != null ? e.judge_status       : '',
+              judge_latency_ms:   e.judge_latency_ms   != null ? e.judge_latency_ms   : null
+            };
+          }
+        }
+      }
+      var socDict = {};
+      turns.forEach(function (t) {
+        var entry = { response: t.response };
+        if (t.judge) {
+          entry.judge_fidelity_score     = t.judge.fidelity_score;
+          entry.judge_fidelity_reasoning = t.judge.fidelity_reasoning;
+          entry.judge_intent_score       = t.judge.intent_score;
+          entry.judge_intent_reasoning   = t.judge.intent_reasoning;
+          entry.judge_status             = t.judge.judge_status;
+          entry.judge_latency_ms         = t.judge.judge_latency_ms;
+        }
+        socDict[t.prompt] = entry;
+      });
+      return socDict;
+    }
+
+    return {};
   }
 
   window.addEventListener('message', handleMessage, false);
