@@ -60,7 +60,7 @@ The OpenRouter keys cannot ship in `embed.html` (anyone can `view-source` the pa
 
 | File | Role |
 |---|---|
-| `embed.html` | The whole experimental UI — single self-contained page served from GitHub Pages. Reads `?condition=`, `?arm=`, `?pid=`, `?model=`. Contains both arm system prompts and the Judge orchestration. **Edit this for any UI/prompt/chart change.** |
+| `embed.html` | The whole experimental UI — single self-contained page served from GitHub Pages. Reads `?condition=`, `?arm=`, `?pid=`, `?model=`. Contains both arm system prompts, the Judge orchestration, and the multi-question `QUESTIONS` array (each question carries its own chart + T/F text). **Edit this for any UI/prompt/chart change.** |
 | `worker.js` | Cloudflare Worker source. Three POST routes (`/llm`, `/search`, `/judge`), Origin allowlist, CORS. |
 | `wrangler.jsonc` | Worker deployment config (used by `wrangler deploy`). |
 | `qualtrics-question-js.js` | Bridge that pastes into the **Add JavaScript** panel of each Qualtrics question. Listens for postMessage events from the iframe and writes flat per-turn fields + aggregates to Embedded Data. |
@@ -76,6 +76,7 @@ The OpenRouter keys cannot ship in `embed.html` (anyone can `view-source` the pa
 | Change | Where | How to deploy |
 |---|---|---|
 | UI / chart / questions / instructions | `embed.html` (top of file) | `git push` → GitHub Pages picks it up in ~30s. No build step. |
+| Add/edit/reorder the per-item questions | `QUESTIONS` array near the top of `embed.html`. Each entry needs `{id, type, text, chart}`. Declare a matching `qN_answer` Embedded Data field in Survey Flow for every new id. | `git push`. |
 | LLM arm system prompts | Edit `rct_arm_prompts.md` first (canonical), then mirror into `SYSTEM_PROMPT_SOCRATIC` / `SYSTEM_PROMPT_UNRESTRICTED` literals in `embed.html`. | `git push`. |
 | Judge prompt | Same dual-edit: `rct_judge_prompts.md` then `RCT_JUDGE_SYSTEM_PROMPT` literal in `embed.html`. | `git push`. |
 | Judge model swap | Change `RCT_JUDGE_MODEL` in `embed.html`. Cross-family rule: if you change the generator family, change the Judge family too (Wataoka et al. 2024, self-preference bias). | `git push`. |

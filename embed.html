@@ -90,6 +90,14 @@
   .rct-chart-xlabel { font-size: 11px; fill: #455a64; }
 
   .rct-question-block { padding: 16px; flex: 1 1 auto; }
+  .rct-question-progress {
+    margin: 0 0 10px 0;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #607d8b;
+  }
   .rct-question { margin-bottom: 16px; }
   .rct-question-text { margin: 0 0 12px 0; font-size: 15px; line-height: 1.4; color: #263238; }
   .rct-question-options { display: flex; gap: 24px; }
@@ -290,20 +298,77 @@
     '<h2 class="rct-instructions-title">Instructions</h2>' +
     '<p class="rct-instructions-body">Sample text</p>';
 
+  /* ==================================================================
+   * QUESTIONS — multi-question flow.
+   *
+   * Participants see one question at a time, sharing the same screen
+   * layout (chart on the left, treatment panel on the right). When
+   * they submit an answer, the screen swaps to the next question. The
+   * final submit triggers `rct_complete` and the Qualtrics Next button.
+   *
+   * Each question carries its OWN chart (so different items can probe
+   * different data-literacy skills). To add or change questions, just
+   * edit the array below — the rest of the UI follows.
+   *
+   * Per-question history reset:
+   *   RESET_CHAT_BETWEEN_QUESTIONS / RESET_SEARCH_BETWEEN_QUESTIONS
+   *   When true, the chat log / search results clear visually and the
+   *   LLM stops receiving prior-question turns as context. The events
+   *   themselves stay in InteractionLog (tagged with question_id) so
+   *   analysts retain the full record. Default true for cleaner
+   *   per-item experimental control — flip to false if you want
+   *   conversation memory to persist across items.
+   * ================================================================== */
   var QUESTIONS = [
-    { id: 'q1', type: 'truefalse', text: 'Based on the chart, this company is profitable.' }
+    {
+      id: 'q1',
+      type: 'truefalse',
+      text: 'Based on the chart, this company was profitable in every year shown.',
+      chart: {
+        title: 'Acme Corp — Net Income',
+        yLabel: 'Net income (USD millions)',
+        bars: [
+          { label: '2021', value: 4 },
+          { label: '2022', value: 12 },
+          { label: '2023', value: -3 },
+          { label: '2024', value: 9 }
+        ]
+      }
+    },
+    {
+      id: 'q2',
+      type: 'truefalse',
+      text: 'Based on the chart, market share grew faster from 2022 to 2023 than from 2023 to 2024.',
+      chart: {
+        title: 'Beta Industries — Market Share',
+        yLabel: 'Share of segment (%)',
+        bars: [
+          { label: '2021', value: 8 },
+          { label: '2022', value: 11 },
+          { label: '2023', value: 17 },
+          { label: '2024', value: 21 }
+        ]
+      }
+    },
+    {
+      id: 'q3',
+      type: 'truefalse',
+      text: 'Based on the chart, customer count more than doubled between 2021 and 2024.',
+      chart: {
+        title: 'Gamma Co. — Active Customers',
+        yLabel: 'Customers (thousands)',
+        bars: [
+          { label: '2021', value: 32 },
+          { label: '2022', value: 38 },
+          { label: '2023', value: 55 },
+          { label: '2024', value: 71 }
+        ]
+      }
+    }
   ];
 
-  var CHART_DATA = {
-    title: 'Company Performance',
-    yLabel: 'Revenue (USD millions)',
-    bars: [
-      { label: '2021', value: 42 },
-      { label: '2022', value: 58 },
-      { label: '2023', value: 51 },
-      { label: '2024', value: 73 }
-    ]
-  };
+  var RESET_CHAT_BETWEEN_QUESTIONS   = true;   // clear chat history when advancing to next question
+  var RESET_SEARCH_BETWEEN_QUESTIONS = true;   // clear search results when advancing to next question
 
   // SEARCH backend — Cloudflare Worker /search route, which proxies to
   // DuckDuckGo HTML and parses results server-side. No API key needed.
@@ -420,12 +485,14 @@
       judge_mode:  RCT_JUDGE_ENABLED ? RCT_JUDGE_MODE  : 'off',
       started_at: isoNow(),
       events: [],
-      prompt_count: 0,         // LLM prompts sent (chat condition)
-      response_count: 0,       // successful assistant replies / search-results-shown
-      query_count: 0,          // SEARCH queries sent (search condition)
-      click_count: 0,          // SEARCH result clicks
-      judge_call_count: 0,     // total Judge calls (incl. retries)
-      judge_failure_count: 0,  // turns with non-`ok` Judge status
+      prompt_count: 0,             // LLM prompts sent (chat condition) — cumulative across all questions
+      response_count: 0,           // successful assistant replies — cumulative across all questions
+      query_count: 0,              // SEARCH queries sent — cumulative across all questions
+      click_count: 0,              // SEARCH result clicks — cumulative across all questions
+      judge_call_count: 0,         // total Judge calls (incl. retries) — cumulative
+      judge_failure_count: 0,      // turns with non-`ok` Judge status — cumulative
+      current_question_index: 0,   // 0-based; advances on per-question submit
+      question_count: QUESTIONS.length,
       answers: initialAnswers
     };
   }
@@ -450,6 +517,21 @@
       if (parsed.arm === undefined)         parsed.arm         = (parsed.condition === 'LLM') ? ARM : null;
       if (parsed.judge_model === undefined) parsed.judge_model = RCT_JUDGE_ENABLED ? RCT_JUDGE_MODEL : null;
       if (parsed.judge_mode  === undefined) parsed.judge_mode  = RCT_JUDGE_ENABLED ? RCT_JUDGE_MODE  : 'off';
+      // Multi-question backfill for logs written before the multi-question flow.
+      if (typeof parsed.current_question_index !== 'number') {
+        // Derive index from existing answer_final events so refresh-mid-flow restores correctly.
+        var finalised = {};
+        (parsed.events || []).forEach(function (e) {
+          if (e.type === 'answer_final' && e.question_id) finalised[e.question_id] = true;
+        });
+        var idx = 0;
+        for (var i = 0; i < QUESTIONS.length; i++) {
+          if (!finalised[QUESTIONS[i].id]) { idx = i; break; }
+          idx = i + 1;
+        }
+        parsed.current_question_index = Math.min(idx, QUESTIONS.length - 1);
+      }
+      if (typeof parsed.question_count !== 'number') parsed.question_count = QUESTIONS.length;
       return parsed;
     } catch (e) {
       console.warn('[RCT] failed to load stored log:', e);
@@ -468,7 +550,26 @@
 
   function logEvent(evt) {
     evt.ts = isoNow();
+    // Tag every event with the question_id it belongs to, so per-question
+    // analysis is trivial. Caller can pass an explicit question_id; otherwise
+    // we stamp the current question's id automatically. We never overwrite
+    // an explicitly-provided question_id.
+    if (evt.question_id === undefined) {
+      var q = currentQuestion();
+      if (q) evt.question_id = q.id;
+    }
     log.events.push(evt);
+  }
+
+  function currentQuestion() {
+    var idx = (log && typeof log.current_question_index === 'number') ? log.current_question_index : 0;
+    if (idx < 0) idx = 0;
+    if (idx >= QUESTIONS.length) idx = QUESTIONS.length - 1;
+    return QUESTIONS[idx];
+  }
+
+  function isLastQuestion() {
+    return (log.current_question_index >= QUESTIONS.length - 1);
   }
 
   var log = loadLog() || newLog();
@@ -543,33 +644,60 @@
    * ================================================================== */
   function renderChart() {
     var holder = $('#chart-root');
-    var bars = CHART_DATA.bars;
+    if (!holder) return;
+    var q = currentQuestion();
+    var chart = (q && q.chart) ? q.chart : { title: '(no chart)', yLabel: '', bars: [] };
+    var bars = chart.bars || [];
+    // Reflect the chart title in the pane header so participants know
+    // what data they're looking at (useful when items differ in topic).
+    var paneHeader = root.querySelector('.rct-left .rct-pane-header');
+    if (paneHeader) paneHeader.textContent = chart.title || 'Chart';
+
+    if (!bars.length) { holder.innerHTML = ''; return; }
     var W = 480, H = 280;
     var pad = { top: 32, right: 16, bottom: 44, left: 56 };
     var plotW = W - pad.left - pad.right;
     var plotH = H - pad.top - pad.bottom;
+    // Support negative bar values (e.g. losses) by computing a symmetric
+    // y-axis around zero when any bar is negative.
+    var minV = Math.min.apply(null, bars.map(function (b) { return b.value; }));
     var maxV = Math.max.apply(null, bars.map(function (b) { return b.value; }));
-    var niceMax = Math.ceil(maxV / 10) * 10 || 10;
-    var ticks = [0, niceMax * 0.25, niceMax * 0.5, niceMax * 0.75, niceMax];
+    var yMin = Math.min(0, minV);
+    var yMax = Math.max(0, maxV);
+    if (yMax === yMin) yMax = yMin + 1;
+    function niceCeil(v) { var s = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.abs(v))) - 1)); return Math.ceil(v / s) * s; }
+    function niceFloor(v) { var s = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.abs(v))) - 1)); return Math.floor(v / s) * s; }
+    var niceMax = yMax > 0 ? niceCeil(yMax) : 0;
+    var niceMin = yMin < 0 ? niceFloor(yMin) : 0;
+    if (niceMax === niceMin) niceMax = niceMin + 1;
+    var range = niceMax - niceMin;
+    var tickCount = 5;
+    var ticks = [];
+    for (var t = 0; t < tickCount; t++) ticks.push(niceMin + (range * t / (tickCount - 1)));
+
     var barW = plotW / bars.length * 0.6;
     var step = plotW / bars.length;
+    function yOf(v) { return pad.top + plotH - ((v - niceMin) / range) * plotH; }
+    var zeroY = yOf(0);
 
-    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(CHART_DATA.title) + '" class="rct-chart-svg">';
-    svg += '<text x="' + (W / 2) + '" y="20" text-anchor="middle" class="rct-chart-title">' + esc(CHART_DATA.title) + '</text>';
-    svg += '<text x="-' + (pad.top + plotH / 2) + '" y="14" transform="rotate(-90)" text-anchor="middle" class="rct-chart-axis-label">' + esc(CHART_DATA.yLabel) + '</text>';
-    ticks.forEach(function (t) {
-      var y = pad.top + plotH - (t / niceMax) * plotH;
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(chart.title) + '" class="rct-chart-svg">';
+    svg += '<text x="' + (W / 2) + '" y="20" text-anchor="middle" class="rct-chart-title">' + esc(chart.title) + '</text>';
+    svg += '<text x="-' + (pad.top + plotH / 2) + '" y="14" transform="rotate(-90)" text-anchor="middle" class="rct-chart-axis-label">' + esc(chart.yLabel) + '</text>';
+    ticks.forEach(function (tv) {
+      var y = yOf(tv);
       svg += '<line x1="' + pad.left + '" y1="' + y + '" x2="' + (pad.left + plotW) + '" y2="' + y + '" class="rct-chart-grid"/>';
-      svg += '<text x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" class="rct-chart-tick">' + t + '</text>';
+      svg += '<text x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" class="rct-chart-tick">' + (Math.round(tv * 100) / 100) + '</text>';
     });
     svg += '<line x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (pad.top + plotH) + '" class="rct-chart-axis"/>';
-    svg += '<line x1="' + pad.left + '" y1="' + (pad.top + plotH) + '" x2="' + (pad.left + plotW) + '" y2="' + (pad.top + plotH) + '" class="rct-chart-axis"/>';
+    svg += '<line x1="' + pad.left + '" y1="' + zeroY + '" x2="' + (pad.left + plotW) + '" y2="' + zeroY + '" class="rct-chart-axis"/>';
     bars.forEach(function (b, i) {
       var x = pad.left + i * step + (step - barW) / 2;
-      var h = (b.value / niceMax) * plotH;
-      var y = pad.top + plotH - h;
-      svg += '<rect x="' + x + '" y="' + y + '" width="' + barW + '" height="' + h + '" rx="2" class="rct-chart-bar"/>';
-      svg += '<text x="' + (x + barW / 2) + '" y="' + (y - 6) + '" text-anchor="middle" class="rct-chart-value">' + b.value + '</text>';
+      var y = yOf(b.value);
+      var top = Math.min(y, zeroY);
+      var h   = Math.abs(zeroY - y);
+      svg += '<rect x="' + x + '" y="' + top + '" width="' + barW + '" height="' + h + '" rx="2" class="rct-chart-bar"/>';
+      var labelY = (b.value >= 0) ? (top - 6) : (top + h + 14);
+      svg += '<text x="' + (x + barW / 2) + '" y="' + labelY + '" text-anchor="middle" class="rct-chart-value">' + b.value + '</text>';
       svg += '<text x="' + (x + barW / 2) + '" y="' + (pad.top + plotH + 20) + '" text-anchor="middle" class="rct-chart-xlabel">' + esc(b.label) + '</text>';
     });
     svg += '</svg>';
@@ -578,37 +706,47 @@
 
   function renderQuestions() {
     var holder = $('#question-area');
+    if (!holder) return;
+    var q = currentQuestion();
+    if (!q) { holder.innerHTML = ''; return; }
+    var idx = log.current_question_index;
     var html = '';
-    QUESTIONS.forEach(function (q) {
-      html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
-      html += '<p class="rct-question-text">' + esc(q.text) + '</p>';
-      if (q.type === 'truefalse') {
-        var name = 'rct-' + q.id;
-        html += '<div class="rct-question-options">';
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>';
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>';
-        html += '</div>';
-      }
+    html += '<p class="rct-question-progress">Question ' + (idx + 1) + ' of ' + QUESTIONS.length + '</p>';
+    html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
+    html += '<p class="rct-question-text">' + esc(q.text) + '</p>';
+    if (q.type === 'truefalse') {
+      var name = 'rct-' + q.id;
+      html += '<div class="rct-question-options">';
+      html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>';
+      html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>';
       html += '</div>';
-    });
-    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>Submit answer</button>';
-    html += '<p class="rct-submit-hint">You can change your selection until you click Submit.</p>';
+    }
+    html += '</div>';
+    var btnLabel = isLastQuestion() ? 'Finish' : 'Next question →';
+    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + btnLabel + '</button>';
+    var hintText = isLastQuestion()
+      ? 'You can change your selection until you click Finish.'
+      : 'You can change your selection until you click Next question.';
+    html += '<p class="rct-submit-hint">' + hintText + '</p>';
     holder.innerHTML = html;
 
-    QUESTIONS.forEach(function (q) {
-      $$('input[name="rct-' + q.id + '"]').forEach(function (input) {
-        input.addEventListener('change', function () {
-          onAnswerChange(q.id, input.value === 'true');
-        });
+    $$('input[name="rct-' + q.id + '"]').forEach(function (input) {
+      input.addEventListener('change', function () {
+        onAnswerChange(q.id, input.value === 'true');
       });
-      var v = log.answers[q.id];
-      if (v === true || v === false) {
-        var sel = $('input[name="rct-' + q.id + '"][value="' + (v ? 'true' : 'false') + '"]');
-        if (sel) sel.checked = true;
-      }
     });
-    $('#rct-submit-final').addEventListener('click', onSubmitFinal);
+    var v = log.answers[q.id];
+    if (v === true || v === false) {
+      var sel = $('input[name="rct-' + q.id + '"][value="' + (v ? 'true' : 'false') + '"]');
+      if (sel) sel.checked = true;
+    }
+    $('#rct-submit-final').addEventListener('click', onSubmitCurrent);
     refreshSubmitState();
+  }
+
+  function currentAnswered() {
+    var q = currentQuestion();
+    return q && (log.answers[q.id] === true || log.answers[q.id] === false);
   }
 
   function allAnswered() {
@@ -619,11 +757,20 @@
 
   function refreshSubmitState() {
     var btn = $('#rct-submit-final');
-    if (btn) btn.disabled = !allAnswered() || isFinalised();
+    if (!btn) return;
+    btn.disabled = !currentAnswered() || isFinalised();
   }
 
   function isFinalised() {
-    return log.events.some(function (e) { return e.type === 'answer_final'; });
+    // Finalised = the LAST question's answer_final event has been logged.
+    // While participants advance through earlier questions, isFinalised
+    // stays false (each per-question submit logs answer_final for that
+    // question only). This gates lockPanel / busy disabling.
+    var lastId = QUESTIONS.length ? QUESTIONS[QUESTIONS.length - 1].id : null;
+    if (!lastId) return false;
+    return log.events.some(function (e) {
+      return e.type === 'answer_final' && e.question_id === lastId;
+    });
   }
 
   function onAnswerChange(qid, value) {
@@ -634,25 +781,63 @@
     refreshSubmitState();
   }
 
-  function onSubmitFinal() {
-    if (!allAnswered() || isFinalised()) return;
+  function onSubmitCurrent() {
+    if (!currentAnswered() || isFinalised()) return;
     // If the participant is currently viewing a result in the right
     // panel, close the viewer first so the dwell event is logged with
     // the correct reason and chronology.
     if (typeof closeResultInPanel === 'function' && _viewingResult) {
       closeResultInPanel('submit_final');
     }
-    QUESTIONS.forEach(function (q) {
-      logEvent({ type: 'answer_final', question_id: q.id, value: log.answers[q.id] });
-    });
-    lockPanel();
-    persist();
-    postToParent({ type: 'rct_complete' });
-    var btn = $('#rct-submit-final');
-    if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
-    $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
-    var hint = $('.rct-submit-hint');
-    if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+    var q = currentQuestion();
+    logEvent({ type: 'answer_final', question_id: q.id, value: log.answers[q.id] });
+
+    if (isLastQuestion()) {
+      // Final submit — lock panel and complete.
+      lockPanel();
+      persist();
+      postToParent({ type: 'rct_complete' });
+      var btn = $('#rct-submit-final');
+      if (btn) { btn.disabled = true; btn.textContent = 'Submitted'; }
+      $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
+      var hint = $('.rct-submit-hint');
+      if (hint) hint.textContent = 'All answers recorded. Click Next to continue.';
+      postHeight();
+    } else {
+      // Advance to the next question.
+      log.current_question_index += 1;
+      logEvent({ type: 'question_advanced', question_id: QUESTIONS[log.current_question_index].id, advanced_to_index: log.current_question_index });
+      persist();
+      advanceToNextQuestion();
+    }
+  }
+
+  // Called after current_question_index has been incremented. Re-renders
+  // the chart + question, and optionally clears the right-panel UI so the
+  // participant starts each item with a fresh treatment surface.
+  function advanceToNextQuestion() {
+    renderChart();
+    renderQuestions();
+    if (CONDITION === 'LLM') {
+      if (RESET_CHAT_BETWEEN_QUESTIONS) {
+        var logEl = $('#rct-chat-log'); if (logEl) logEl.innerHTML = '';
+        var input = $('#rct-chat-input'); if (input) { input.value = ''; input.disabled = false; }
+        var sendBtn = $('#rct-chat-send'); if (sendBtn) sendBtn.disabled = false;
+      } else {
+        replayChat();
+      }
+    } else if (CONDITION === 'SEARCH') {
+      if (RESET_SEARCH_BETWEEN_QUESTIONS) {
+        var results = $('#rct-search-results'); if (results) results.innerHTML = '';
+        var sin = $('#rct-search-input'); if (sin) { sin.value = ''; sin.disabled = false; }
+        var sbtn = $('#rct-search-button'); if (sbtn) sbtn.disabled = false;
+        if (typeof closeResultInPanel === 'function' && _viewingResult) {
+          closeResultInPanel('next_question');
+        }
+      } else {
+        replaySearch();
+      }
+    }
     postHeight();
   }
 
@@ -688,7 +873,12 @@
     var logEl = $('#rct-chat-log');
     if (!logEl) return;
     logEl.innerHTML = '';
+    var curId = (currentQuestion() || {}).id;
     log.events.forEach(function (e) {
+      // When RESET_CHAT_BETWEEN_QUESTIONS is on, only replay events for
+      // the question we're currently on so refresh-mid-flow matches the
+      // visual state the participant left.
+      if (RESET_CHAT_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) return;
       if (e.type === 'prompt') appendBubble('user', e.content);
       else if (e.type === 'response') appendBubble('assistant', e.content);
       else if (e.type === 'error' && e.error) appendBubble('error', 'Error: ' + e.error);
@@ -774,10 +964,14 @@
   ].join('\n');
 
   function rctJudgeBuildUserMessage(participantMsg, assistantMsg) {
-    var taskClaim = (QUESTIONS[0] && QUESTIONS[0].text) || '(unspecified)';
-    var bars = (CHART_DATA && CHART_DATA.bars) || [];
-    var chartDesc = ((CHART_DATA && CHART_DATA.title) || 'a chart') +
-                    ' — ' + ((CHART_DATA && CHART_DATA.yLabel) || '(no y-label)') + '. ' +
+    // Use the question/chart the participant is currently looking at so
+    // the Judge scores the assistant's response against the right item.
+    var q = currentQuestion() || {};
+    var taskClaim = q.text || '(unspecified)';
+    var chart = q.chart || {};
+    var bars = chart.bars || [];
+    var chartDesc = (chart.title || 'a chart') +
+                    ' — ' + (chart.yLabel || '(no y-label)') + '. ' +
                     'Data points: ' +
                     bars.map(function (b) { return b.label + '=' + b.value; }).join(', ') + '.';
     return '<task_context>\n' +
@@ -928,7 +1122,13 @@
   function rctBuildMessagesFromLog(systemPromptOverride) {
     var sys = (typeof systemPromptOverride === 'string') ? systemPromptOverride : SYSTEM_PROMPT;
     var messages = [{ role: 'system', content: sys }];
+    var curId = (currentQuestion() || {}).id;
     log.events.forEach(function (e) {
+      // When RESET_CHAT_BETWEEN_QUESTIONS is on, scope the LLM's view of
+      // history to the current question only — so the participant gets a
+      // fresh conversation per item and the model doesn't carry prior-item
+      // context. The events themselves stay in InteractionLog regardless.
+      if (RESET_CHAT_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) return;
       if (e.type === 'prompt') messages.push({ role: 'user', content: e.content });
       else if (e.type === 'response') messages.push({ role: 'assistant', content: e.content });
     });
@@ -1077,7 +1277,11 @@
 
   function replaySearch() {
     var lastQuery = null, lastResults = null;
+    var curId = (currentQuestion() || {}).id;
     log.events.forEach(function (e) {
+      // When RESET_SEARCH_BETWEEN_QUESTIONS is on, only replay the
+      // search state for the current question.
+      if (RESET_SEARCH_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) return;
       if (e.type === 'search_query')         lastQuery   = e.query;
       if (e.type === 'search_results_shown') lastResults = e.results;
     });
