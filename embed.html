@@ -143,6 +143,42 @@
   .rct-chat-assistant { align-self: flex-start; background: #fff; color: #263238; border: 1px solid #eceff1; border-bottom-left-radius: 4px; }
   .rct-chat-error { align-self: flex-start; background: #fff3e0; color: #bf360c; border: 1px solid #ffcc80; border-radius: 4px; font-size: 13px; }
   #rct-chat-typing { padding: 4px 16px; font-size: 12px; color: #78909c; font-style: italic; }
+  #rct-share-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid #eceff1;
+    background: #fafafa;
+    font-size: 13px;
+  }
+  #rct-share-chart-btn {
+    background: #fff;
+    color: #1976d2;
+    border: 1px solid #1976d2;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 120ms, color 120ms, border-color 120ms;
+  }
+  #rct-share-chart-btn:hover:not(:disabled) { background: #e3f2fd; }
+  #rct-share-chart-btn:disabled {
+    background: #eceff1; color: #78909c; border-color: #cfd8dc; cursor: not-allowed;
+  }
+  #rct-share-chart-status { color: #2e7d32; font-size: 12px; }
+  #rct-share-chart-status.is-error { color: #c62828; }
+  .rct-chat-context {
+    align-self: center;
+    background: #e8f5e9;
+    color: #1b5e20;
+    border: 1px solid #a5d6a7;
+    border-radius: 12px;
+    padding: 6px 12px;
+    font-size: 12px;
+    max-width: 90%;
+  }
   #rct-chat-form { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid #eceff1; background: #fff; }
   #rct-chat-input {
     flex: 1 1 auto; padding: 10px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
@@ -586,10 +622,23 @@
   function buildDom() {
     var rightHtml;
     if (CONDITION === 'LLM') {
+      // Share-chart toolbar is rendered only for the UNRESTRICTED arm.
+      // The Socratic arm intentionally omits it: sharing the chart image
+      // would let the model compute the answer directly, defeating the
+      // probe-only scaffold the Socratic prompt enforces.
+      var shareToolbarHtml = (ARM === 'unrestricted')
+        ? '<div id="rct-share-toolbar">' +
+            '<button id="rct-share-chart-btn" type="button" class="rct-button rct-button-secondary" title="Send the chart image and data to the assistant as context for the next message.">' +
+              '<span aria-hidden="true" style="margin-right:6px">📊</span>Share chart with assistant' +
+            '</button>' +
+            '<span id="rct-share-chart-status" aria-live="polite"></span>' +
+          '</div>'
+        : '';
       rightHtml =
         '<div id="right-panel-llm">' +
           '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="Chat transcript"></div>' +
           '<div id="rct-chat-typing" style="display:none">Assistant is typing…</div>' +
+          shareToolbarHtml +
           '<form id="rct-chat-form" autocomplete="off">' +
             '<input id="rct-chat-input" type="text" placeholder="Ask the assistant about the chart…" maxlength="1000" />' +
             '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">Send</button>' +
@@ -826,6 +875,10 @@
       } else {
         replayChat();
       }
+      // Reset the Share-chart button so the new question starts fresh.
+      // The participant can share the new chart once; sharing is scoped
+      // per-question by the context_share event's question_id.
+      refreshShareChartUI();
     } else if (CONDITION === 'SEARCH') {
       if (RESET_SEARCH_BETWEEN_QUESTIONS) {
         var results = $('#rct-search-results'); if (results) results.innerHTML = '';
@@ -847,7 +900,8 @@
     }
     var rp = $('.rct-right');
     if (rp) rp.classList.add('is-locked');
-    ['#rct-chat-input', '#rct-chat-send', '#rct-search-input', '#rct-search-button',
+    ['#rct-chat-input', '#rct-chat-send', '#rct-share-chart-btn',
+     '#rct-search-input', '#rct-search-button',
      '#rct-result-frame-back'].forEach(function (sel) {
       var el = $(sel); if (el) el.disabled = true;
     });
@@ -869,6 +923,100 @@
     });
   }
 
+  /* ==================================================================
+   * Share chart with assistant (unrestricted arm only).
+   *
+   * Clicking the button injects the current chart image (PNG rasterised
+   * from the live SVG) plus a structured text block (title, y-axis,
+   * data points, and the True/False claim) into the conversation as a
+   * multimodal user message. This message is added to the LLM's view
+   * of history on the next prompt — it is NOT immediately sent as a
+   * standalone request, so the participant must still type something
+   * to get a response that incorporates the shared context.
+   *
+   * One share per question. The button disables after click and a
+   * confirmation chip is rendered into the chat log so the participant
+   * sees that the chart has been attached. The advance-to-next-question
+   * flow resets this state.
+   *
+   * Image data is held in an in-memory cache (NOT in the persisted log)
+   * and re-rendered from QUESTIONS[i].chart on refresh. The context_share
+   * event itself is persisted so we know the participant shared, and so
+   * rctBuildMessagesFromLog can reconstruct the multimodal message after
+   * a reload.
+   * ================================================================== */
+  function wireShareChart() {
+    var btn = $('#rct-share-chart-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      if (isFinalised()) return;
+      if (currentQuestionAlreadyShared()) return;
+      btn.disabled = true;
+      shareChartContext();
+    });
+    // Reflect any prior share (e.g. after refresh-mid-flow on the current
+    // question) so the button doesn't offer a duplicate share.
+    refreshShareChartUI();
+  }
+
+  function currentQuestionAlreadyShared() {
+    var curId = (currentQuestion() || {}).id;
+    return log.events.some(function (e) {
+      return e.type === 'context_share' && e.question_id === curId;
+    });
+  }
+
+  function refreshShareChartUI() {
+    var btn = $('#rct-share-chart-btn');
+    var status = $('#rct-share-chart-status');
+    if (!btn) return;
+    if (isFinalised()) {
+      btn.disabled = true;
+      return;
+    }
+    if (currentQuestionAlreadyShared()) {
+      btn.disabled = true;
+      btn.textContent = '✓ Chart shared';
+      if (status) { status.textContent = ''; status.classList.remove('is-error'); }
+    } else {
+      btn.disabled = false;
+      btn.innerHTML = '<span aria-hidden="true" style="margin-right:6px">📊</span>Share chart with assistant';
+      if (status) { status.textContent = ''; status.classList.remove('is-error'); }
+    }
+  }
+
+  function shareChartContext() {
+    var status = $('#rct-share-chart-status');
+    var q = currentQuestion();
+    if (!q) return;
+    // Render the PNG eagerly so the cache is hot for the next chat send.
+    rctRenderChartPng(q.id).then(function () {
+      logEvent({ type: 'context_share', question_id: q.id });
+      appendContextChip('Chart and chart data shared with the assistant.');
+      persist();
+      refreshShareChartUI();
+      if (status) status.textContent = 'Attached — included with your next message.';
+    }).catch(function (err) {
+      var btn = $('#rct-share-chart-btn');
+      if (btn) btn.disabled = false;
+      if (status) {
+        status.textContent = 'Could not render chart image (' + (err && err.message || 'unknown') + ').';
+        status.classList.add('is-error');
+      }
+    });
+  }
+
+  function appendContextChip(text) {
+    var logEl = $('#rct-chat-log');
+    if (!logEl) return;
+    var div = document.createElement('div');
+    div.className = 'rct-chat-context';
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+    postHeight();
+  }
+
   function replayChat() {
     var logEl = $('#rct-chat-log');
     if (!logEl) return;
@@ -882,6 +1030,7 @@
       if (e.type === 'prompt') appendBubble('user', e.content);
       else if (e.type === 'response') appendBubble('assistant', e.content);
       else if (e.type === 'error' && e.error) appendBubble('error', 'Error: ' + e.error);
+      else if (e.type === 'context_share') appendContextChip('Chart and chart data shared with the assistant.');
     });
   }
 
@@ -903,6 +1052,13 @@
     if (btn)   btn.disabled   = busy || isFinalised();
     var typing = $('#rct-chat-typing');
     if (typing) typing.style.display = busy ? '' : 'none';
+    // Also gate the share button: don't allow a share while a generator
+    // call is in flight (could race with the message-build), and don't
+    // re-enable it if the participant already shared this question.
+    var share = $('#rct-share-chart-btn');
+    if (share) {
+      share.disabled = busy || isFinalised() || currentQuestionAlreadyShared();
+    }
   }
 
   /* ==================================================================
@@ -1119,19 +1275,113 @@
   // Build the OpenRouter messages array from the current log + system
   // prompt. Used by both the initial generator call and any active-mode
   // regeneration (which substitutes a reinforced system prompt).
-  function rctBuildMessagesFromLog(systemPromptOverride) {
+  // In-memory cache of chart PNG data URLs, keyed by question_id. Populated
+  // when the participant clicks "Share chart with assistant" (unrestricted
+  // arm only). NOT persisted to localStorage / InteractionLog because data
+  // URLs are large and Embedded Data fields are size-capped — we re-render
+  // from QUESTIONS[i].chart on refresh instead.
+  var _chartPngCache = {};
+
+  // Render the current chart's SVG to a PNG data URL. Async because the
+  // browser needs to round-trip through an <img> element (only way to
+  // rasterise SVG to a canvas).
+  function rctRenderChartPng(qid) {
+    return new Promise(function (resolve, reject) {
+      try {
+        var svgEl = root.querySelector('#chart-root svg');
+        if (!svgEl) { reject(new Error('no chart svg')); return; }
+        // Clone so we can stamp dimensions / namespace without touching the live DOM.
+        var clone = svgEl.cloneNode(true);
+        var vb = (clone.getAttribute('viewBox') || '0 0 480 280').split(/\s+/);
+        var W = parseFloat(vb[2]) || 480;
+        var H = parseFloat(vb[3]) || 280;
+        clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+        clone.setAttribute('width', W);
+        clone.setAttribute('height', H);
+        var svgStr = new XMLSerializer().serializeToString(clone);
+        // unescape + encodeURIComponent handles non-ASCII (e.g. — in titles)
+        var dataUrl = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
+        var img = new Image();
+        img.onload = function () {
+          var canvas = document.createElement('canvas');
+          // Render at 2x for a sharper image without ballooning size.
+          var scale = 2;
+          canvas.width  = W * scale;
+          canvas.height = H * scale;
+          var ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          try {
+            var png = canvas.toDataURL('image/png');
+            if (qid) _chartPngCache[qid] = png;
+            resolve(png);
+          } catch (e) { reject(e); }
+        };
+        img.onerror = function () { reject(new Error('svg image load failed')); };
+        img.src = dataUrl;
+      } catch (err) { reject(err); }
+    });
+  }
+
+  // Build the textual chart description that accompanies the shared image.
+  function rctChartDescription(q) {
+    var chart = (q && q.chart) || {};
+    var bars = chart.bars || [];
+    var lines = [];
+    lines.push('Chart title: ' + (chart.title || '(untitled)'));
+    if (chart.yLabel) lines.push('Y-axis: ' + chart.yLabel);
+    lines.push('Data points:');
+    bars.forEach(function (b) { lines.push('  ' + b.label + ': ' + b.value); });
+    return lines.join('\n');
+  }
+
+  // Build the OpenRouter messages array. Async because shared-chart events
+  // need an attached PNG, which requires rendering through an <img> element.
+  // The order is: [system, ...for each chat turn in order, optionally
+  // prepended by a context-share multimodal user message that arrived
+  // before the first prompt].
+  async function rctBuildMessagesFromLog(systemPromptOverride) {
     var sys = (typeof systemPromptOverride === 'string') ? systemPromptOverride : SYSTEM_PROMPT;
     var messages = [{ role: 'system', content: sys }];
     var curId = (currentQuestion() || {}).id;
-    log.events.forEach(function (e) {
-      // When RESET_CHAT_BETWEEN_QUESTIONS is on, scope the LLM's view of
-      // history to the current question only — so the participant gets a
-      // fresh conversation per item and the model doesn't carry prior-item
-      // context. The events themselves stay in InteractionLog regardless.
-      if (RESET_CHAT_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) return;
-      if (e.type === 'prompt') messages.push({ role: 'user', content: e.content });
-      else if (e.type === 'response') messages.push({ role: 'assistant', content: e.content });
-    });
+    var curQ = currentQuestion();
+
+    // Iterate in chronological order. context_share events become
+    // multimodal user messages (text + image); prompt/response stay as
+    // string-content user/assistant messages.
+    for (var i = 0; i < log.events.length; i++) {
+      var e = log.events[i];
+      if (RESET_CHAT_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) continue;
+      if (e.type === 'prompt') {
+        messages.push({ role: 'user', content: e.content });
+      } else if (e.type === 'response') {
+        messages.push({ role: 'assistant', content: e.content });
+      } else if (e.type === 'context_share') {
+        // Fetch the PNG (from cache, or regenerate from current chart data).
+        var png = _chartPngCache[e.question_id];
+        if (!png) {
+          try { png = await rctRenderChartPng(e.question_id); } catch (_) { png = null; }
+        }
+        var textBlock = '[CONTEXT FROM PARTICIPANT]\n' +
+                        'The participant has shared the chart they are looking at.\n\n' +
+                        rctChartDescription(curQ) + '\n\n' +
+                        'The participant is judging True/False on the claim: "' + (curQ && curQ.text || '') + '"';
+        if (png) {
+          messages.push({
+            role: 'user',
+            content: [
+              { type: 'text', text: textBlock },
+              { type: 'image_url', image_url: { url: png } }
+            ]
+          });
+        } else {
+          // PNG render failed — fall back to text-only context so the
+          // shared event still influences the conversation.
+          messages.push({ role: 'user', content: textBlock + '\n\n(Note: the chart image could not be rendered, but the data is included above.)' });
+        }
+      }
+    }
     return messages;
   }
 
@@ -1173,7 +1423,7 @@
     appendBubble('user', userInput);
     persist();
 
-    var messages = rctBuildMessagesFromLog();
+    var messages = await rctBuildMessagesFromLog();
     setChatBusy(true);
 
     // ===== Generator call (initial draft) =====
@@ -1204,7 +1454,7 @@
           && firstJudgement.fidelity_score < RCT_JUDGE_THRESHOLD) {
         activeRegenTriggered = true;
         var reinforcedSys = SYSTEM_PROMPT + rctJudgeBuildReinforcement(firstJudgement);
-        var regenMessages = rctBuildMessagesFromLog(reinforcedSys);
+        var regenMessages = await rctBuildMessagesFromLog(reinforcedSys);
         var regen = await rctGenerateChatReply(regenMessages, MODEL);
         if (regen.error) {
           activeRegenSucceeded = false;       // serve the original draft
@@ -1562,7 +1812,7 @@
   buildDom();
   renderChart();
   renderQuestions();
-  if (CONDITION === 'LLM')   { wireChat();   replayChat();   }
+  if (CONDITION === 'LLM')   { wireChat(); wireShareChart(); replayChat(); }
   if (CONDITION === 'SEARCH'){ wireSearch(); wireResultFrameBack(); replaySearch(); }
 
   if (isFinalised()) {
