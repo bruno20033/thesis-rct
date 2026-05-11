@@ -51,6 +51,11 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('judge_mode',          log.judge_mode  || '');
         Q.setEmbeddedData('judge_call_count',    String(log.judge_call_count    || 0));
         Q.setEmbeddedData('judge_failure_count', String(log.judge_failure_count || 0));
+        // Multi-question progress — written on every interaction so
+        // analysts can see how far each participant got (and split
+        // drop-outs by which question they abandoned on).
+        Q.setEmbeddedData('current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
+        Q.setEmbeddedData('question_count',         String(log.question_count        != null ? log.question_count        : 0));
         if (log.answers) {
           Object.keys(log.answers).forEach(function (qid) {
             var v = log.answers[qid];

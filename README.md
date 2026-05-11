@@ -81,6 +81,14 @@ The study has **three arms**, randomised between-subjects:
 
 If `arm` is missing on the LLM condition, the embed defaults to `unrestricted` for backward compatibility with the pre-arm URL shape.
 
+### Multi-question flow
+
+The treatment screen cycles through multiple questions sequentially: the participant answers one True/False item, clicks **Next question →**, and the chart + question text + treatment-panel state swap to the next item. The final question's button reads **Finish** and triggers `rct_complete` (which reveals the Qualtrics **Next** button). Each question carries its own chart, defined in the `QUESTIONS` array at the top of `embed.html` — to add or change items, just edit that array.
+
+By default the chat/search history resets between questions (constants `RESET_CHAT_BETWEEN_QUESTIONS` and `RESET_SEARCH_BETWEEN_QUESTIONS` in `embed.html`) so each item is a clean experimental unit and the LLM doesn't carry prior-item context. Flip either constant to `false` if you want conversational memory or accumulated search history to persist across items. All events in `InteractionLog` are tagged with `question_id` regardless of the reset setting, so per-question analysis is always possible.
+
+**To add or remove questions**, edit the `QUESTIONS` array in `embed.html` and declare a matching `qN_answer` field in Survey Flow for each new question id. `current_question_index` and `question_count` are written on every interaction so analysts can split drop-outs by which question the participant abandoned.
+
 Add an **Embedded Data** element at the top of Survey Flow with these field names (leave values blank — the bridge fills them):
 
 ```
@@ -92,8 +100,14 @@ session_id
 model_used
 InteractionLog
 
-# task answer
+# task answers (one per question — declare q1..qN to match QUESTIONS.length in embed.html)
 q1_answer
+q2_answer
+q3_answer
+
+# multi-question progress (written on every interaction; useful for analysing drop-outs)
+current_question_index
+question_count
 
 # LLM-condition counters and content
 prompt_count
