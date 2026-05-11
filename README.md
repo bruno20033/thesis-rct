@@ -107,6 +107,7 @@ participant_id
 session_id
 model_used
 InteractionLog
+interaction_log              # per-condition dict view — see "interaction_log dictionary schema" below
 
 # task answers (one per question — declare q1..qN to match QUESTIONS.length in embed.html)
 q1_answer
@@ -241,6 +242,74 @@ Everything user-facing lives at the top of `embed.html`. After editing, **redepl
 | Aesthetics | The `<style>` block |
 
 Different instructions per condition? Move `INSTRUCTIONS_HTML` below the `CONDITION` resolution and gate on `CONDITION === 'LLM'`.
+
+## `interaction_log` dictionary schema
+
+In addition to the rich `InteractionLog` field (the full JSON event log), the bridge writes an analyst-friendly per-condition dictionary view to a separate Embedded Data field called **`interaction_log`** (lowercase). This view is rewritten on every interaction; just declare the field in Survey Flow and you'll see it in CSV export. The shape depends on `condition` + `arm`:
+
+### SEARCH condition
+
+Keys are search queries; values are the **ordered list of URLs the participant clicked** for that query.
+
+```jsonc
+{
+  "acme corp profitable":         ["investors.acmecorp.com/annual-report-2024", "reuters.com/business/acme-corp-q4"],
+  "is acme net income 2023":      ["wikipedia.org/Acme_Corp"],
+  "beta industries market share": []   // query submitted, no results clicked
+}
+```
+
+A query with no clicks is still present, mapped to an empty list. If the participant repeats a query verbatim, subsequent clicks accumulate into the same list.
+
+### LLM + unrestricted arm
+
+Keys are the participant's prompts; values are a two-element list: `[feature_used, llm_response]`. `feature_used` is `1` if the participant clicked **📊 Share chart** for the current question before sending this prompt, otherwise `0`.
+
+```jsonc
+{
+  "What does the chart show?":  [0, "It shows net income from 2021 to 2024…"],
+  "Was 2023 profitable?":       [1, "Looking at the chart, 2023 shows a loss…"],
+  "What is the trend?":         [0, "Market share is growing…"],
+  "Compare the growth rates.":  [1, "2022–23 growth was larger…"]
+}
+```
+
+### LLM + Socratic arm
+
+Keys are the participant's prompts; values are an object containing the assistant response plus the LLM-as-Judge scoring for that turn.
+
+```jsonc
+{
+  "Was this profitable?": {
+    "response":                 "What does the y-axis tell you about each year?",
+    "judge_fidelity_score":     4,                                  // SOLO 1-5; 3 is the passing threshold
+    "judge_fidelity_reasoning": "Probing question, no answer revealed",
+    "judge_intent_score":       4,                                  // 1-4
+    "judge_intent_reasoning":   "Conceptual inquiry",
+    "judge_status":             "ok",                               // "ok" | "timeout" | "parse_error" | "api_error"
+    "judge_latency_ms":         1240
+  },
+  "Can you just tell me the answer?": {
+    "response":                 "Have you considered what \"profitable\" means here?",
+    "judge_fidelity_score":     3,
+    "judge_fidelity_reasoning": "Probing back at the question",
+    "judge_intent_score":       1,
+    "judge_intent_reasoning":   "Direct extraction attempt",
+    "judge_status":             "ok",
+    "judge_latency_ms":         980
+  }
+}
+```
+
+Only the **initial-draft** Judge scoring is included (regen-scored judgements stay in the rich `InteractionLog` event log). If a Judge call is still in flight at the time of a write, the Judge fields will be missing on that turn and will be backfilled on the next interaction.
+
+### Dictionary order
+
+JSON objects in modern parsers (ES2020+) preserve **insertion order**. For all three condition dicts, keys appear in the **chronological order** in which the participant first sent each prompt / first submitted each search query. CSV exports preserve the string value verbatim — `JSON.parse()` it in your analysis script to recover the ordered structure.
+
+### Duplicate keys
+
+JSON-object semantics: if a key appears twice (e.g. the participant typed the same prompt verbatim, or repeated the same search query), the LAST occurrence wins for LLM dicts. For SEARCH, clicks across repeated queries accumulate into the same list — the key is not overwritten, the value's list just grows. For lossless turn-by-turn analysis, use the rich `InteractionLog.events` array instead.
 
 ## Data model
 

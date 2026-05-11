@@ -63,7 +63,7 @@ The OpenRouter keys cannot ship in `embed.html` (anyone can `view-source` the pa
 | `embed.html` | The whole experimental UI — single self-contained page served from GitHub Pages. Reads `?condition=`, `?arm=`, `?pid=`, `?model=`. Contains both arm system prompts, the Judge orchestration, and the multi-question `QUESTIONS` array (each question carries its own chart + T/F text). **Edit this for any UI/prompt/chart change.** |
 | `worker.js` | Cloudflare Worker source. Three POST routes (`/llm`, `/search`, `/judge`), Origin allowlist, CORS. |
 | `wrangler.jsonc` | Worker deployment config (used by `wrangler deploy`). |
-| `qualtrics-question-js.js` | Bridge that pastes into the **Add JavaScript** panel of each Qualtrics question. Listens for postMessage events from the iframe and writes flat per-turn fields + aggregates to Embedded Data. |
+| `qualtrics-question-js.js` | Bridge that pastes into the **Add JavaScript** panel of each Qualtrics question. Listens for postMessage events from the iframe and writes flat per-turn fields + aggregates to Embedded Data. Also writes the analyst-friendly `interaction_log` dict view (per-condition schema documented in README § "interaction_log dictionary schema"). |
 | `qualtrics-llm.html` | The single `<iframe>` line to paste into the **Question Text → HTML source** of the LLM question. Uses `${e://Field/arm}` so one question serves both LLM arms. |
 | `qualtrics-search.html` | Same, for the SEARCH question. |
 | `rct_arm_prompts.md` | Canonical text of `SYSTEM_PROMPT_SOCRATIC` and `SYSTEM_PROMPT_UNRESTRICTED`. **Edit here first, then mirror into the JS literals in `embed.html` before deploying.** |
