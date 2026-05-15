@@ -72,6 +72,10 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08);
     overflow: hidden;
   }
+  /* NOAID condition: hide the right pane, let the left pane fill full width */
+  .rct-root.is-noaid .rct-right { display: none; }
+  .rct-root.is-noaid .rct-left  { flex: 1 1 100%; max-width: 720px; margin: 0 auto; }
+
   .rct-pane-header {
     padding: 12px 16px; border-bottom: 1px solid #eceff1;
     font-weight: 500; font-size: 14px; letter-spacing: 0.02em;
@@ -330,10 +334,6 @@
     '- Address conceptual edge cases when relevant.\n\n' +
     'Keep responses short — 1 to 3 sentences, ideally a single focused question.';
 
-  var INSTRUCTIONS_HTML =
-    '<h2 class="rct-instructions-title">Instructions</h2>' +
-    '<p class="rct-instructions-body">Sample text</p>';
-
   /* ==================================================================
    * QUESTIONS — multi-question flow.
    *
@@ -451,7 +451,7 @@
   }
 
   var rawCondition = (getParam('condition') || '').toUpperCase();
-  var CONDITION = (rawCondition === 'LLM' || rawCondition === 'SEARCH') ? rawCondition : null;
+  var CONDITION = (rawCondition === 'LLM' || rawCondition === 'SEARCH' || rawCondition === 'NOAID') ? rawCondition : null;
   var PID       = getParam('pid')   || ('local-' + Math.random().toString(36).slice(2, 10));
   var MODEL     = getParam('model') || DEFAULT_MODEL;
 
@@ -480,12 +480,19 @@
     root.innerHTML =
       '<div class="rct-fatal">' +
       '<h2>Missing condition parameter</h2>' +
-      '<p>This embed must be loaded with a <code>condition</code> query parameter, ' +
-         'either <code>LLM</code> or <code>SEARCH</code>.</p>' +
+      '<p>This embed must be loaded with a <code>condition</code> query parameter: ' +
+         '<code>LLM</code>, <code>SEARCH</code>, or <code>NOAID</code>.</p>' +
       '<p>Example: <code>embed.html?condition=LLM&amp;pid=test123</code></p>' +
       '</div>';
     return;
   }
+
+  /* Instructions text — must be defined AFTER CONDITION is parsed above */
+  var INSTRUCTIONS_HTML = (CONDITION === 'NOAID')
+    ? '<h2 class="rct-instructions-title">Instructions</h2>' +
+      '<p class="rct-instructions-body">For each chart below, read the statement carefully and decide whether it is <strong>True</strong> or <strong>False</strong> based on the data shown. No external tools are available for this section.</p>'
+    : '<h2 class="rct-instructions-title">Instructions</h2>' +
+      '<p class="rct-instructions-body">Sample text</p>';
 
   /* ==================================================================
    * Postmessage to Qualtrics parent
@@ -621,7 +628,11 @@
 
   function buildDom() {
     var rightHtml;
-    if (CONDITION === 'LLM') {
+    if (CONDITION === 'NOAID') {
+      // No tool panel — the right pane is hidden via CSS (.is-noaid).
+      // We still emit the <section> for DOM consistency, but it's display:none.
+      rightHtml = '';
+    } else if (CONDITION === 'LLM') {
       // Share-chart toolbar is rendered only for the UNRESTRICTED arm.
       // The Socratic arm intentionally omits it: sharing the chart image
       // would let the model compute the answer directly, defeating the
@@ -683,6 +694,11 @@
           rightHtml +
         '</section>' +
       '</div>';
+
+    // NOAID: add class that hides the right pane and centres the left pane
+    if (CONDITION === 'NOAID') {
+      root.classList.add('is-noaid');
+    }
   }
 
   function $(sel)  { return root.querySelector(sel); }
