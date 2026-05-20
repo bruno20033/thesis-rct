@@ -116,12 +116,6 @@
   .rct-option.is-selected { background: #e3f2fd; border-color: #1976d2; }
   .rct-option input { accent-color: #1976d2; cursor: pointer; margin-top: 2px; flex-shrink: 0; }
   .rct-option-idk { border-style: dashed; color: #78909c; }
-  .rct-question-skill {
-    display: inline-block; font-size: 11px; font-weight: 500;
-    letter-spacing: 0.03em; text-transform: uppercase;
-    color: #fff; background: #607d8b; padding: 2px 8px;
-    border-radius: 3px; margin-bottom: 6px;
-  }
 
   .rct-button {
     appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
@@ -899,7 +893,6 @@
     var idx = log.current_question_index;
     var html = '';
     html += '<p class="rct-question-progress">Question ' + (idx + 1) + ' of ' + QUESTIONS.length + '</p>';
-    if (q.skill) html += '<span class="rct-question-skill">' + esc(q.skill) + '</span>';
     html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
     html += '<p class="rct-question-text">' + esc(q.text) + '</p>';
     var name = 'rct-' + q.id;
