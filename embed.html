@@ -104,15 +104,24 @@
   }
   .rct-question { margin-bottom: 16px; }
   .rct-question-text { margin: 0 0 12px 0; font-size: 15px; line-height: 1.4; color: #263238; }
-  .rct-question-options { display: flex; gap: 24px; }
+  .rct-question-options { display: flex; flex-direction: column; gap: 8px; }
   .rct-option {
-    display: inline-flex; align-items: center; gap: 8px;
+    display: flex; align-items: flex-start; gap: 8px;
     font-size: 14px; cursor: pointer; user-select: none;
-    padding: 6px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
+    padding: 8px 12px; border: 1px solid #cfd8dc; border-radius: 4px;
     background: #fff; transition: background 120ms, border-color 120ms;
+    line-height: 1.4;
   }
   .rct-option:hover { background: #f5f7f8; border-color: #90a4ae; }
-  .rct-option input { accent-color: #1976d2; cursor: pointer; }
+  .rct-option.is-selected { background: #e3f2fd; border-color: #1976d2; }
+  .rct-option input { accent-color: #1976d2; cursor: pointer; margin-top: 2px; flex-shrink: 0; }
+  .rct-option-idk { border-style: dashed; color: #78909c; }
+  .rct-question-skill {
+    display: inline-block; font-size: 11px; font-weight: 500;
+    letter-spacing: 0.03em; text-transform: uppercase;
+    color: #fff; background: #607d8b; padding: 2px 8px;
+    border-radius: 3px; margin-bottom: 6px;
+  }
 
   .rct-button {
     appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
@@ -355,51 +364,154 @@
    *   per-item experimental control — flip to false if you want
    *   conversation memory to persist across items.
    * ================================================================== */
+  var SHARED_CHART = {
+    title: 'Weekly Sales by Division',
+    subtitle: 'Acme Corp — Sales figures over the past year (in thousands USD)',
+    yLabel: 'Sales (thousands USD)',
+    yMax: 250,
+    footnote: 'N = number of weeks with sales > $0',
+    boxplots: [
+      { label: 'North', color: '#4a7cb5', n: 52, min: 65, q1: 95, median: 130, q3: 165, max: 210, outliers: [30] },
+      { label: 'South', color: '#e07b54', n: 48, min: 40, q1: 70, median: 95, q3: 120, max: 160, outliers: [] },
+      { label: 'West',  color: '#5da06b', n: 34, min: 80, q1: 110, median: 140, q3: 175, max: 220, outliers: [45] }
+    ]
+  };
+
   var QUESTIONS = [
+    // ── SKILL 1: DATA INTERPRETATION (easy → very hard) ──
     {
-      id: 'q1',
-      type: 'truefalse',
-      text: 'Based on the chart, this company was profitable in every year shown.',
-      chart: {
-        title: 'Acme Corp — Net Income',
-        yLabel: 'Net income (USD millions)',
-        bars: [
-          { label: '2021', value: 4 },
-          { label: '2022', value: 12 },
-          { label: '2023', value: -3 },
-          { label: '2024', value: 9 }
-        ]
-      }
+      id: 'di_1', type: 'multichoice', skill: 'Data Interpretation', difficulty: 1,
+      text: 'Which division has the highest median weekly sales?',
+      options: [
+        { key: 'a', text: 'North' },
+        { key: 'b', text: 'South' },
+        { key: 'c', text: 'West' },
+        { key: 'd', text: 'North and West have approximately the same median' }
+      ],
+      correct: 'c'
     },
     {
-      id: 'q2',
-      type: 'truefalse',
-      text: 'Based on the chart, market share grew faster from 2022 to 2023 than from 2023 to 2024.',
-      chart: {
-        title: 'Beta Industries — Market Share',
-        yLabel: 'Share of segment (%)',
-        bars: [
-          { label: '2021', value: 8 },
-          { label: '2022', value: 11 },
-          { label: '2023', value: 17 },
-          { label: '2024', value: 21 }
-        ]
-      }
+      id: 'di_2', type: 'multichoice', skill: 'Data Interpretation', difficulty: 2,
+      text: 'What is the approximate interquartile range (the height of the box) for the North division?',
+      options: [
+        { key: 'a', text: '~$50k' },
+        { key: 'b', text: '~$70k' },
+        { key: 'c', text: '~$130k' },
+        { key: 'd', text: '~$145k' }
+      ],
+      correct: 'b'
     },
     {
-      id: 'q3',
-      type: 'truefalse',
-      text: 'Based on the chart, customer count more than doubled between 2021 and 2024.',
-      chart: {
-        title: 'Gamma Co. — Active Customers',
-        yLabel: 'Customers (thousands)',
-        bars: [
-          { label: '2021', value: 32 },
-          { label: '2022', value: 38 },
-          { label: '2023', value: 55 },
-          { label: '2024', value: 71 }
-        ]
-      }
+      id: 'di_3', type: 'multichoice', skill: 'Data Interpretation', difficulty: 3,
+      text: 'Which division recorded the single worst sales week across the entire past year?',
+      options: [
+        { key: 'a', text: 'North — it has an outlier week at approximately $30k' },
+        { key: 'b', text: 'South — its lowest week was approximately $40k' },
+        { key: 'c', text: 'West — it had weeks with $0 in sales' },
+        { key: 'd', text: 'Cannot be determined — outliers may represent data errors' }
+      ],
+      correct: 'c'
+    },
+    {
+      id: 'di_4', type: 'multichoice', skill: 'Data Interpretation', difficulty: 4,
+      text: 'Using median weekly sales as an estimate, approximately how much more total annual revenue did North generate compared to West?',
+      options: [
+        { key: 'a', text: 'About $500k — North\'s lower median nearly offsets its extra active weeks' },
+        { key: 'b', text: 'About $2,000k' },
+        { key: 'c', text: 'West actually generated more total revenue — its higher median more than compensates for fewer active weeks' },
+        { key: 'd', text: 'They generated approximately the same total, as North\'s extra weeks are offset by West\'s higher per-week sales' }
+      ],
+      correct: 'b'
+    },
+    // ── SKILL 2: DATA-DRIVEN DECISION MAKING (easy → very hard) ──
+    {
+      id: 'dddm_1', type: 'multichoice', skill: 'Data-Driven Decision Making', difficulty: 1,
+      text: 'A key client requires guaranteed weekly deliveries with no gaps. Which division is the best fit to serve this client?',
+      options: [
+        { key: 'a', text: 'North' },
+        { key: 'b', text: 'South — its predictable sales range makes it dependable' },
+        { key: 'c', text: 'West — its high median means it can handle large orders when active' },
+        { key: 'd', text: 'Any division — all had sales in the majority of weeks' }
+      ],
+      correct: 'a'
+    },
+    {
+      id: 'dddm_2', type: 'multichoice', skill: 'Data-Driven Decision Making', difficulty: 2,
+      text: 'The company allocates a one-time $50k marketing budget to one division for a single week. If the return is proportional to that week\'s sales — but if the division has a zero-sales week, the entire $50k is lost — which division should receive the investment?',
+      options: [
+        { key: 'a', text: 'West — its highest median means the highest expected return per active week' },
+        { key: 'b', text: 'North — it has no zero-sales weeks, so the investment is never wasted' },
+        { key: 'c', text: 'South — its narrow IQR minimises downside risk' },
+        { key: 'd', text: 'West — even its weakest active weeks ($110k at Q1) outperform North\'s Q1' }
+      ],
+      correct: 'b'
+    },
+    {
+      id: 'dddm_3', type: 'multichoice', skill: 'Data-Driven Decision Making', difficulty: 3,
+      text: 'The CFO asks for an estimate of each division\'s total annual revenue using median × active weeks. Which division is projected to generate the least total revenue?',
+      options: [
+        { key: 'a', text: 'West — its 34 active weeks severely limit its total' },
+        { key: 'b', text: 'South' },
+        { key: 'c', text: 'North — its moderate median ($130k) is dragged down by the outlier' },
+        { key: 'd', text: 'South and West are essentially tied, so neither is clearly the least' }
+      ],
+      correct: 'b'
+    },
+    {
+      id: 'dddm_4', type: 'multichoice', skill: 'Data-Driven Decision Making', difficulty: 4,
+      text: 'A regional manager proposes: "Give me West\'s territory. I\'ll get sales in all 52 weeks while maintaining the current median. That\'s 18 extra weeks at $140k = ~$2.5M in new revenue." What is the most important limitation of this projection?',
+      options: [
+        { key: 'a', text: 'The estimate is unreliable because 34 weeks is too small a sample to trust the median' },
+        { key: 'b', text: 'The $2.5M figure ignores that North already outperforms West in total revenue' },
+        { key: 'c', text: 'The projection assumes new active weeks would match the current median, but the zero-sales weeks may reflect structural constraints that effort alone cannot overcome' },
+        { key: 'd', text: 'The calculation is wrong — 18 × $140k equals $2.52M, not $2.5M' }
+      ],
+      correct: 'c'
+    },
+    // ── SKILL 3: CRITICAL THINKING (easy → very hard) ──
+    {
+      id: 'ct_1', type: 'multichoice', skill: 'Critical Thinking', difficulty: 1,
+      text: 'A colleague states: "South is clearly the worst-performing division." Which response best evaluates this claim?',
+      options: [
+        { key: 'a', text: 'Correct — South has the lowest median, Q1, Q3, and maximum of all three divisions' },
+        { key: 'b', text: 'Partially correct — South has the lowest median, but "worst" depends on criteria: West had 18 weeks with zero sales' },
+        { key: 'c', text: 'Incorrect — South\'s smaller IQR proves it is the most efficient division' },
+        { key: 'd', text: 'Incorrect — South generated more total revenue than West over the year' }
+      ],
+      correct: 'b'
+    },
+    {
+      id: 'ct_2', type: 'multichoice', skill: 'Critical Thinking', difficulty: 2,
+      text: 'The manager of West claims: "Our median is the highest — we are the top-performing division." What is the most significant problem with this reasoning?',
+      options: [
+        { key: 'a', text: 'The median is misleading because it is heavily influenced by the outlier at ~$45k' },
+        { key: 'b', text: 'The median only reflects weeks with active sales and excludes the 18 weeks when West generated $0' },
+        { key: 'c', text: 'The median is not a reliable statistic for sales data — the mean should always be used instead' },
+        { key: 'd', text: 'West\'s high median is driven by a small number of exceptionally strong weeks' }
+      ],
+      correct: 'b'
+    },
+    {
+      id: 'ct_3', type: 'multichoice', skill: 'Critical Thinking', difficulty: 3,
+      text: 'Analyst A argues: "North is the most reliable — it sold in all 52 weeks." Analyst B counters: "But North has the largest IQR and most extreme outlier, so it\'s the least reliable." Which evaluation is most accurate?',
+      options: [
+        { key: 'a', text: 'Analyst A is correct — having sales every week is the only meaningful measure of reliability' },
+        { key: 'b', text: 'Analyst B is correct — a large IQR and an extreme outlier prove North\'s revenue is unpredictable' },
+        { key: 'c', text: 'Both highlight different dimensions: A addresses operational reliability (no zero weeks), B addresses revenue predictability (high variability)' },
+        { key: 'd', text: 'Neither is correct — reliability should be measured by median sales, which puts West first' }
+      ],
+      correct: 'c'
+    },
+    {
+      id: 'ct_4', type: 'multichoice', skill: 'Critical Thinking', difficulty: 4,
+      text: 'A board presentation states: "West has the highest potential — when active, it outperforms every other division at every quartile." This claim is factually correct. What is the most important question the board should ask before accepting the conclusion?',
+      options: [
+        { key: 'a', text: 'Whether the differences between West\'s and North\'s quartiles are statistically significant' },
+        { key: 'b', text: 'Whether the zero-sales weeks were caused by fixable operational issues or by structural market constraints that investment cannot change' },
+        { key: 'c', text: 'Whether West\'s sample of 34 weeks is large enough to be representative' },
+        { key: 'd', text: 'Whether North\'s outlier at ~$30k should be removed to make the comparison fairer' }
+      ],
+      correct: 'b'
     }
   ];
 
@@ -707,66 +819,76 @@
   /* ==================================================================
    * Chart, questions, and treatment renderers
    * ================================================================== */
+  var _chartRendered = false;
   function renderChart() {
+    if (_chartRendered) return;
     var holder = $('#chart-root');
     if (!holder) return;
-    var q = currentQuestion();
-    var chart = (q && q.chart) ? q.chart : { title: '(no chart)', yLabel: '', bars: [] };
-    var bars = chart.bars || [];
-    // Reflect the chart title in the pane header so participants know
-    // what data they're looking at (useful when items differ in topic).
+    var chart = SHARED_CHART;
+    var bps = chart.boxplots || [];
     var paneHeader = root.querySelector('.rct-left .rct-pane-header');
     if (paneHeader) paneHeader.textContent = chart.title || 'Chart';
+    if (!bps.length) { holder.innerHTML = ''; return; }
 
-    if (!bars.length) { holder.innerHTML = ''; return; }
-    var W = 480, H = 280;
-    var pad = { top: 32, right: 16, bottom: 44, left: 56 };
+    var W = 480, H = 330;
+    var pad = { top: 44, right: 16, bottom: 76, left: 60 };
     var plotW = W - pad.left - pad.right;
     var plotH = H - pad.top - pad.bottom;
-    // Support negative bar values (e.g. losses) by computing a symmetric
-    // y-axis around zero when any bar is negative.
-    var minV = Math.min.apply(null, bars.map(function (b) { return b.value; }));
-    var maxV = Math.max.apply(null, bars.map(function (b) { return b.value; }));
-    var yMin = Math.min(0, minV);
-    var yMax = Math.max(0, maxV);
-    if (yMax === yMin) yMax = yMin + 1;
-    function niceCeil(v) { var s = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.abs(v))) - 1)); return Math.ceil(v / s) * s; }
-    function niceFloor(v) { var s = Math.pow(10, Math.max(0, Math.floor(Math.log10(Math.abs(v))) - 1)); return Math.floor(v / s) * s; }
-    var niceMax = yMax > 0 ? niceCeil(yMax) : 0;
-    var niceMin = yMin < 0 ? niceFloor(yMin) : 0;
-    if (niceMax === niceMin) niceMax = niceMin + 1;
-    var range = niceMax - niceMin;
-    var tickCount = 5;
-    var ticks = [];
-    for (var t = 0; t < tickCount; t++) ticks.push(niceMin + (range * t / (tickCount - 1)));
+    var yMaxVal = chart.yMax || 250;
+    function yOf(v) { return pad.top + plotH - (v / yMaxVal) * plotH; }
 
-    var barW = plotW / bars.length * 0.6;
-    var step = plotW / bars.length;
-    function yOf(v) { return pad.top + plotH - ((v - niceMin) / range) * plotH; }
-    var zeroY = yOf(0);
+    var step = plotW / bps.length;
+    var boxW = step * 0.42;
+
+    var ticks = [];
+    var tickStep = yMaxVal / 5;
+    for (var t = 0; t <= 5; t++) ticks.push(t * tickStep);
 
     var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(chart.title) + '" class="rct-chart-svg">';
-    svg += '<text x="' + (W / 2) + '" y="20" text-anchor="middle" class="rct-chart-title">' + esc(chart.title) + '</text>';
+    svg += '<text x="' + (W / 2) + '" y="18" text-anchor="middle" class="rct-chart-title">' + esc(chart.title) + '</text>';
+    if (chart.subtitle) {
+      svg += '<text x="' + (W / 2) + '" y="34" text-anchor="middle" style="font-size:10px;fill:#78909c">' + esc(chart.subtitle) + '</text>';
+    }
     svg += '<text x="-' + (pad.top + plotH / 2) + '" y="14" transform="rotate(-90)" text-anchor="middle" class="rct-chart-axis-label">' + esc(chart.yLabel) + '</text>';
+
     ticks.forEach(function (tv) {
       var y = yOf(tv);
       svg += '<line x1="' + pad.left + '" y1="' + y + '" x2="' + (pad.left + plotW) + '" y2="' + y + '" class="rct-chart-grid"/>';
-      svg += '<text x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" class="rct-chart-tick">' + (Math.round(tv * 100) / 100) + '</text>';
+      svg += '<text x="' + (pad.left - 8) + '" y="' + (y + 4) + '" text-anchor="end" class="rct-chart-tick">' + tv + '</text>';
     });
+
     svg += '<line x1="' + pad.left + '" y1="' + pad.top + '" x2="' + pad.left + '" y2="' + (pad.top + plotH) + '" class="rct-chart-axis"/>';
-    svg += '<line x1="' + pad.left + '" y1="' + zeroY + '" x2="' + (pad.left + plotW) + '" y2="' + zeroY + '" class="rct-chart-axis"/>';
-    bars.forEach(function (b, i) {
-      var x = pad.left + i * step + (step - barW) / 2;
-      var y = yOf(b.value);
-      var top = Math.min(y, zeroY);
-      var h   = Math.abs(zeroY - y);
-      svg += '<rect x="' + x + '" y="' + top + '" width="' + barW + '" height="' + h + '" rx="2" class="rct-chart-bar"/>';
-      var labelY = (b.value >= 0) ? (top - 6) : (top + h + 14);
-      svg += '<text x="' + (x + barW / 2) + '" y="' + labelY + '" text-anchor="middle" class="rct-chart-value">' + b.value + '</text>';
-      svg += '<text x="' + (x + barW / 2) + '" y="' + (pad.top + plotH + 20) + '" text-anchor="middle" class="rct-chart-xlabel">' + esc(b.label) + '</text>';
+    svg += '<line x1="' + pad.left + '" y1="' + yOf(0) + '" x2="' + (pad.left + plotW) + '" y2="' + yOf(0) + '" class="rct-chart-axis"/>';
+
+    bps.forEach(function (bp, i) {
+      var cx = pad.left + i * step + step / 2;
+      var x1 = cx - boxW / 2;
+      var x2 = cx + boxW / 2;
+      var capHalf = boxW * 0.3;
+      var yMin = yOf(bp.min), yQ1 = yOf(bp.q1), yMed = yOf(bp.median), yQ3 = yOf(bp.q3), yMx = yOf(bp.max);
+
+      svg += '<line x1="' + cx + '" y1="' + yMin + '" x2="' + cx + '" y2="' + yQ1 + '" stroke="' + bp.color + '" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg += '<line x1="' + cx + '" y1="' + yQ3 + '" x2="' + cx + '" y2="' + yMx + '" stroke="' + bp.color + '" stroke-width="1.5" stroke-dasharray="4,3"/>';
+      svg += '<line x1="' + (cx - capHalf) + '" y1="' + yMin + '" x2="' + (cx + capHalf) + '" y2="' + yMin + '" stroke="' + bp.color + '" stroke-width="1.5"/>';
+      svg += '<line x1="' + (cx - capHalf) + '" y1="' + yMx  + '" x2="' + (cx + capHalf) + '" y2="' + yMx  + '" stroke="' + bp.color + '" stroke-width="1.5"/>';
+      svg += '<rect x="' + x1 + '" y="' + yQ3 + '" width="' + boxW + '" height="' + (yQ1 - yQ3) + '" fill="' + bp.color + '" fill-opacity="0.2" stroke="' + bp.color + '" stroke-width="1.5" rx="2"/>';
+      svg += '<line x1="' + x1 + '" y1="' + yMed + '" x2="' + x2 + '" y2="' + yMed + '" stroke="' + bp.color + '" stroke-width="2.5"/>';
+
+      (bp.outliers || []).forEach(function (ov) {
+        svg += '<circle cx="' + cx + '" cy="' + yOf(ov) + '" r="4" fill="none" stroke="' + bp.color + '" stroke-width="1.5"/>';
+      });
+
+      var labelY = pad.top + plotH + 18;
+      svg += '<text x="' + cx + '" y="' + labelY + '" text-anchor="middle" style="font-size:12px;fill:#333;font-weight:500">' + esc(bp.label) + '</text>';
+      svg += '<text x="' + cx + '" y="' + (labelY + 16) + '" text-anchor="middle" style="font-size:10px;fill:#888;font-style:italic">N = ' + bp.n + ' weeks</text>';
     });
+
+    if (chart.footnote) {
+      svg += '<text x="' + (W / 2) + '" y="' + (H - 4) + '" text-anchor="middle" style="font-size:9px;fill:#999">' + esc(chart.footnote) + '</text>';
+    }
     svg += '</svg>';
     holder.innerHTML = svg;
+    _chartRendered = true;
   }
 
   function renderQuestions() {
@@ -777,15 +899,21 @@
     var idx = log.current_question_index;
     var html = '';
     html += '<p class="rct-question-progress">Question ' + (idx + 1) + ' of ' + QUESTIONS.length + '</p>';
+    if (q.skill) html += '<span class="rct-question-skill">' + esc(q.skill) + '</span>';
     html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
     html += '<p class="rct-question-text">' + esc(q.text) + '</p>';
-    if (q.type === 'truefalse') {
-      var name = 'rct-' + q.id;
-      html += '<div class="rct-question-options">';
+    var name = 'rct-' + q.id;
+    html += '<div class="rct-question-options">';
+    if (q.type === 'multichoice' && q.options) {
+      q.options.forEach(function (opt) {
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(opt.key + ') ' + opt.text) + '</span></label>';
+      });
+    } else if (q.type === 'truefalse') {
       html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>';
       html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>';
-      html += '</div>';
     }
+    html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>I don\'t know</span></label>';
+    html += '</div>';
     html += '</div>';
     var btnLabel = isLastQuestion() ? 'Finish' : 'Next question →';
     html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + btnLabel + '</button>';
@@ -795,15 +923,18 @@
     html += '<p class="rct-submit-hint">' + hintText + '</p>';
     holder.innerHTML = html;
 
-    $$('input[name="rct-' + q.id + '"]').forEach(function (input) {
+    $$('input[name="' + name + '"]').forEach(function (input) {
       input.addEventListener('change', function () {
-        onAnswerChange(q.id, input.value === 'true');
+        onAnswerChange(q.id, input.value);
+        $$('.rct-option').forEach(function (lbl) { lbl.classList.remove('is-selected'); });
+        var parent = input.closest('.rct-option');
+        if (parent) parent.classList.add('is-selected');
       });
     });
     var v = log.answers[q.id];
-    if (v === true || v === false) {
-      var sel = $('input[name="rct-' + q.id + '"][value="' + (v ? 'true' : 'false') + '"]');
-      if (sel) sel.checked = true;
+    if (v != null) {
+      var sel = $('input[name="' + name + '"][value="' + v + '"]');
+      if (sel) { sel.checked = true; var p = sel.closest('.rct-option'); if (p) p.classList.add('is-selected'); }
     }
     $('#rct-submit-final').addEventListener('click', onSubmitCurrent);
     refreshSubmitState();
@@ -811,12 +942,12 @@
 
   function currentAnswered() {
     var q = currentQuestion();
-    return q && (log.answers[q.id] === true || log.answers[q.id] === false);
+    return q && log.answers[q.id] != null;
   }
 
   function allAnswered() {
     return QUESTIONS.every(function (q) {
-      return log.answers[q.id] === true || log.answers[q.id] === false;
+      return log.answers[q.id] != null;
     });
   }
 
@@ -1136,18 +1267,18 @@
   ].join('\n');
 
   function rctJudgeBuildUserMessage(participantMsg, assistantMsg) {
-    // Use the question/chart the participant is currently looking at so
-    // the Judge scores the assistant's response against the right item.
     var q = currentQuestion() || {};
     var taskClaim = q.text || '(unspecified)';
-    var chart = q.chart || {};
-    var bars = chart.bars || [];
-    var chartDesc = (chart.title || 'a chart') +
-                    ' — ' + (chart.yLabel || '(no y-label)') + '. ' +
-                    'Data points: ' +
-                    bars.map(function (b) { return b.label + '=' + b.value; }).join(', ') + '.';
+    var chart = SHARED_CHART;
+    var bps = chart.boxplots || [];
+    var chartDesc = (chart.title || 'a chart') + ' — ' + (chart.yLabel || '') + '. ' +
+      'Boxplots: ' + bps.map(function (bp) {
+        return bp.label + ' (N=' + bp.n + ' weeks, min=' + bp.min + ', Q1=' + bp.q1 +
+          ', median=' + bp.median + ', Q3=' + bp.q3 + ', max=' + bp.max +
+          (bp.outliers && bp.outliers.length ? ', outliers=[' + bp.outliers.join(',') + ']' : '') + ')';
+      }).join('; ') + '. ' + (chart.footnote || '');
     return '<task_context>\n' +
-           'The participant is judging True/False on the claim: "' + taskClaim + '"\n' +
+           'The participant is answering a multiple-choice question: "' + taskClaim + '"\n' +
            'The chart shows: ' + chartDesc + '\n' +
            '</task_context>\n\n' +
            '<participant_message>\n' + (participantMsg || '') + '\n</participant_message>\n\n' +
@@ -1340,15 +1471,20 @@
     });
   }
 
-  // Build the textual chart description that accompanies the shared image.
-  function rctChartDescription(q) {
-    var chart = (q && q.chart) || {};
-    var bars = chart.bars || [];
+  function rctChartDescription() {
+    var chart = SHARED_CHART;
+    var bps = chart.boxplots || [];
     var lines = [];
     lines.push('Chart title: ' + (chart.title || '(untitled)'));
+    if (chart.subtitle) lines.push(chart.subtitle);
     if (chart.yLabel) lines.push('Y-axis: ' + chart.yLabel);
-    lines.push('Data points:');
-    bars.forEach(function (b) { lines.push('  ' + b.label + ': ' + b.value); });
+    lines.push('Boxplot data:');
+    bps.forEach(function (bp) {
+      lines.push('  ' + bp.label + ': N=' + bp.n + ' weeks, min=' + bp.min +
+        ', Q1=' + bp.q1 + ', median=' + bp.median + ', Q3=' + bp.q3 + ', max=' + bp.max +
+        (bp.outliers && bp.outliers.length ? ', outliers=[' + bp.outliers.join(',') + ']' : ''));
+    });
+    if (chart.footnote) lines.push(chart.footnote);
     return lines.join('\n');
   }
 
@@ -1381,7 +1517,7 @@
         }
         var textBlock = '[CONTEXT FROM PARTICIPANT]\n' +
                         'The participant has shared the chart they are looking at.\n\n' +
-                        rctChartDescription(curQ) + '\n\n' +
+                        rctChartDescription() + '\n\n' +
                         'The participant is judging True/False on the claim: "' + (curQ && curQ.text || '') + '"';
         if (png) {
           messages.push({
