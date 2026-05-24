@@ -195,7 +195,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         // cr_train_* / cr_post_* Embedded Data fields in Qualtrics.
         // ---------------------------------------------------------
         Q.setJSEmbeddedData('cr_phase', log.phase || '');
-        Q.setJSEmbeddedData('cr_set',   log.cr_set || '');
+        // cr_set is set by Survey Flow Randomizer — not duplicated here.
 
         if (data.cr_items && Array.isArray(data.cr_items)) {
           var prefix = (log.phase === 'train') ? 'cr_train' : 'cr_post';
