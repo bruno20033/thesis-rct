@@ -1,29 +1,34 @@
 <!--
-  SEARCH-CONDITION QUALTRICS QUESTION TEXT (Google-only control arm)
+  SEARCH-CONDITION QUALTRICS QUESTION TEXT (CR Training Phase)
   ====================================================================
   Paste the single <iframe> line below into the SEARCH Text Entry
   question's Question Text via the rich-text editor → Source view
   (the <> button). Do NOT paste this comment.
 
   Piped-text expressions used:
+    ${e://Field/cr_set}      → 'A' or 'B', set by the Set Assignment
+                                Randomizer (counterbalancing).
     ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
                                 id for this response. Used by the
                                 embed as the `pid` query param so all
                                 interactions are scoped per participant.
 
-  No `arm` parameter is needed — the SEARCH condition is the Google-
+  No `arm` parameter is needed — the SEARCH condition is the DuckDuckGo-
   only control and has no Socratic/Unrestricted variants.
+
+  phase=train tells embed.html to load the assigned set's items and
+  enable search tool access.
 
   Companion JS in qualtrics-question-js.js handles the postMessage
   bridge from the iframe to Qualtrics Embedded Data.
   ====================================================================
 -->
 <iframe
-  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=SEARCH&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=SEARCH&phase=train&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}"
   width="100%"
   height="800"
   frameborder="0"
   style="border:none; display:block; width:100%; min-height:700px;"
   allow="clipboard-write"
-  title="Research tools — SEARCH condition">
+  title="Research tools — SEARCH condition (CR training)">
 </iframe>

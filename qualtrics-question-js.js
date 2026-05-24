@@ -28,6 +28,15 @@ Qualtrics.SurveyEngine.addOnReady(function () {
 
   qThis.hideNextButton();
 
+  // Qualtrics Text Entry questions wrap Question Text in <label for="...">,
+  // which intercepts all clicks inside the iframe. Remove the association.
+  var labelEl = qThis.questionContainer
+    ? qThis.questionContainer.querySelector('label.QuestionText')
+    : null;
+  if (labelEl && labelEl.getAttribute('for')) {
+    labelEl.removeAttribute('for');
+  }
+
   function handleMessage(event) {
     if (EXPECTED_ORIGIN && event.origin !== EXPECTED_ORIGIN) return;
     var data = event.data;
@@ -164,6 +173,51 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
         Q.setEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
         Q.setEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
+
+        // ---------------------------------------------------------
+        // CR (Critical Reasoning) mode fields
+        // Written from the cr_* properties attached to the message
+        // by embed.html's computeCRScore(). These populate the
+        // cr_train_* / cr_post_* Embedded Data fields in Qualtrics.
+        // ---------------------------------------------------------
+        Q.setEmbeddedData('cr_phase', log.phase || '');
+        Q.setEmbeddedData('cr_set',   log.cr_set || '');
+
+        if (data.cr_items && Array.isArray(data.cr_items)) {
+          var prefix = (log.phase === 'train') ? 'cr_train' : 'cr_post';
+
+          // Aggregate scores
+          Q.setEmbeddedData(prefix + '_total', String(data.cr_score != null ? data.cr_score : ''));
+          if (prefix === 'cr_post') {
+            Q.setEmbeddedData('cr_post_near', String(data.cr_near != null ? data.cr_near : ''));
+            Q.setEmbeddedData('cr_post_far',  String(data.cr_far  != null ? data.cr_far  : ''));
+          }
+
+          // Per-item fields: answer, correctness, item ID (in presentation order)
+          for (var ci = 0; ci < data.cr_items.length; ci++) {
+            var crItem = data.cr_items[ci];
+            var slot = ci + 1;  // 1-based
+            Q.setEmbeddedData(prefix + '_' + slot,         crItem.answer || '');
+            Q.setEmbeddedData(prefix + '_correct_' + slot, String(crItem.isCorrect));
+            Q.setEmbeddedData(prefix + '_item_' + slot,    crItem.id || '');
+          }
+
+          // Per-item timing: extract from answer_final events
+          var answerFinals = events.filter(function (e) { return e.type === 'answer_final'; });
+          var questionAdvanced = events.filter(function (e) { return e.type === 'question_advanced'; });
+          // Build per-question timing by computing gaps between question_advanced events
+          // First question starts at log.started_at; each subsequent question starts at its question_advanced event
+          var startTimes = [log.started_at ? new Date(log.started_at).getTime() : 0];
+          for (var qi = 0; qi < questionAdvanced.length; qi++) {
+            startTimes.push(questionAdvanced[qi].ts ? new Date(questionAdvanced[qi].ts).getTime() : 0);
+          }
+          for (var ti = 0; ti < answerFinals.length; ti++) {
+            var finalTs = answerFinals[ti].ts ? new Date(answerFinals[ti].ts).getTime() : 0;
+            var startTs = startTimes[ti] || 0;
+            var duration = (finalTs && startTs) ? (finalTs - startTs) : 0;
+            Q.setEmbeddedData(prefix + '_time_' + (ti + 1), String(duration > 0 ? duration : ''));
+          }
+        }
       } catch (e) {
         console.warn('[RCT bridge] setEmbeddedData failed:', e);
       }

@@ -1,5 +1,5 @@
 <!--
-  LLM-CONDITION QUALTRICS QUESTION TEXT
+  LLM-CONDITION QUALTRICS QUESTION TEXT (CR Training Phase)
   ====================================================================
   Paste the single <iframe> line below into the LLM Text Entry
   question's Question Text via the rich-text editor → Source view
@@ -14,19 +14,24 @@
   Piped-text expressions used:
     ${e://Field/arm}         → 'socratic' or 'unrestricted', set by
                                 the Randomizer's Embedded-Data step.
+    ${e://Field/cr_set}      → 'A' or 'B', set by the Set Assignment
+                                Randomizer (counterbalancing).
     ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
                                 id for this response.
+
+  phase=train tells embed.html to load the assigned set's items and
+  enable tool access. cr_set determines which items are shown.
 
   Companion JS in qualtrics-question-js.js handles the postMessage
   bridge from the iframe to Qualtrics Embedded Data.
   ====================================================================
 -->
 <iframe
-  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=LLM&arm=${e://Field/arm}&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=LLM&arm=${e://Field/arm}&phase=train&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}"
   width="100%"
   height="800"
   frameborder="0"
   style="border:none; display:block; width:100%; min-height:700px;"
   allow="clipboard-write"
-  title="Research tools — LLM condition">
+  title="Research tools — LLM condition (CR training)">
 </iframe>

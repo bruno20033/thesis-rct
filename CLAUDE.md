@@ -14,7 +14,32 @@ The hypothesis is **cognitive offloading**: when participants delegate the reaso
 | **LLM-Socratic** | Scaffolded LLM | `?condition=LLM&arm=socratic` | Probe-only system prompt; never reveals answer. Every turn judged by a second LLM for Socratic fidelity. |
 | **LLM-Unrestricted** | Unscaffolded LLM | `?condition=LLM&arm=unrestricted` | Generally-helpful system prompt. May answer directly. No Judge layer. |
 
-The **dependent variable** is performance on held-out GMAT-style Data Insights / Graphics Interpretation items administered after the treatment. The **measured covariates** are interaction quality (turn count, prompt content, search clicks, dwell time) and — for the Socratic arm — Judge-scored fidelity per turn so we can quantify scaffold breakdown.
+The study has three research questions:
+
+| RQ | Label | What it asks | Primary measure |
+|---|---|---|---|
+| **RQ1** | Learning | Does unrestricted LLM use impair skill acquisition? | Proportion correct on unaided post-test (immediate) |
+| **RQ2** | Productivity | Does LLM access improve task performance during practice? | Proportion correct on aided practice block |
+| **H3** | Dissociation | Does the arm that performs best during practice perform worst on the unaided test? | Interaction between arm and block (aided vs unaided) |
+
+The **primary dependent variable** is unaided post-task accuracy — proportion of correct responses on held-out chart-reading items administered immediately after tool withdrawal. **Secondary outcomes** include assisted-phase accuracy (productivity), delayed post-test accuracy (retention), mean time per question, NASA-TLX cognitive load, and self-reported confidence. **Process measures** include turn count, token count, search query count, time-on-task, and — for the Socratic arm — per-turn Judge-scored fidelity and intent scores.
+
+## Confirmed technical parameters
+
+These were confirmed from `embed.html` source inspection (May 2025):
+
+| Parameter | Value | Notes |
+|---|---|---|
+| Generator model | `openai/gpt-4o-mini` | Locked for entire recruitment window |
+| Judge model | `anthropic/claude-haiku-4-5` | Cross-family: OpenAI generator, Anthropic judge (mitigates self-preference bias per Wataoka et al. 2024) |
+| Judge fidelity threshold | ≥ 3 (5-point SOLO-inspired scale) | Relational level — asks probing question without revealing answer |
+| Judge mode | Passive | Fires after response is rendered; scores backfill asynchronously |
+| Judge temperature | 0.1 | Low variance for consistent scoring |
+| Judge max tokens | 400 (Worker-enforced) | |
+| Generator max tokens | 1024 (Worker-enforced) | |
+| Generator temperature | Model default | Not set client-side; Worker does not override for `/llm` |
+| Practice questions | 3 bar-chart items, True/False | `RESET_CHAT_BETWEEN_QUESTIONS = true` — chat history clears between items |
+| Chat reset between questions | Yes | Each question starts a fresh conversation |
 
 ## How the pieces fit together
 
@@ -162,9 +187,108 @@ These are the recurring traps. If you hit one of them, the fix below is almost a
 - **Iframe height keeps growing on each interaction.** Resolved upstream (PR #3) by clamping height in the bridge JS and removing `100vh` from `embed.html`. If it recurs, check that `body { min-height: 100vh }` hasn't been re-introduced in `embed.html` — that triggers a feedback loop with the auto-resize.
 - **Mid-page drop-outs lose recent turns.** Qualtrics persists Embedded Data on page transitions, not on every `setEmbeddedData` call. The iframe's localStorage has the full log but it can't be pulled back from the participant's browser. If complete fidelity is required (IRB), add a `/log` route on the Worker that mirrors each event server-side.
 
+## Thesis writing
+
+The thesis is written in LaTeX, stored separately from the experiment code:
+
+```
+Thesis WIP directory:
+  ~/Library/Mobile Documents/com~apple~CloudDocs/
+    gymnasium steglitz/B.SC Frankfurt School/Oxford/Thesis/WIP/
+
+  thesis-latex/
+  ├── main.tex                  # Master document
+  ├── references.bib            # BibLaTeX bibliography
+  ├── sections/
+  │   ├── abstract.tex
+  │   ├── introduction.tex
+  │   ├── concepts.tex          # Conceptual framework
+  │   ├── theory.tex            # CLT-based theoretical model
+  │   ├── literature_review.tex
+  │   ├── methods.tex           # ← Active drafting target
+  │   ├── results.tex
+  │   └── discussion.tex
+  └── Appendix/
+      └── (CONSORT-AI PDF, etc.)
+
+  methods_plan.md               # Detailed writing blueprint for Methods
+  methods_notes.md              # Working notes and decision log
+```
+
+### Key design decisions (documented in methods.tex and methods_plan.md)
+
+| Decision | Choice | Key justification |
+|---|---|---|
+| Reporting standard | CONSORT-AI (primary) + CONSORT-SPI + TIDieR | AI intervention in a social/psychological trial |
+| Pre-test | Posttest-only (no content-matched pre-test) | Sensitisation d=0.43 (Willson 1982), asymmetric testing effect, demand characteristics in an offloading study |
+| Baseline equivalence | MAILS-S (AI literacy) + Mini-VLAT V2 (visual data literacy) + demographics | Capture relevant individual differences without target-content exposure |
+| Active control | Web search (DuckDuckGo), not no-tool | Ecological validity: compare against existing practice (Freedland et al. 2011); precedent in Shen & Tamkin (2026) |
+| Primary outcome timing | Immediate post-test (primary), delayed post-test (secondary) | Pragmatic: delayed follow-up risks non-random attrition in online adult sample |
+| Analysis framework | OLS with arm dummies, HC1 SEs, Bonferroni-corrected pairwise contrasts | ITT primary, per-protocol sensitivity |
+
+### Methods section writing status
+
+| Subsection | Status | Notes |
+|---|---|---|
+| §5.1 Research Design | ✅ Drafted | Three \paragraph{} blocks: RCT rationale, three-arm structure, posttest-only design |
+| §5.2 Participants | 📝 Planned | Blueprint in methods_plan.md §5.2; boxplot screening DECISION PENDING |
+| §5.3 Setting & Materials | 📝 Planned | Blueprint in methods_plan.md §5.3; concise main text + appendix refs |
+| §5.4 Interventions | 📝 Planned | Blueprint in methods_plan.md §5.4; TIDieR-compliant, Socratic arm has 4-layer compliance structure |
+| §5.5 Measures | 📝 Planned | Blueprint in methods_plan.md §5.5 |
+| §5.6 Procedure | 📝 Planned | Blueprint in methods_plan.md §5.6 |
+| §5.7 Randomisation | ✅ Drafted | In methods.tex (placeholder-level) |
+| §5.8 Sample Size | ✅ Drafted | In methods.tex (placeholder-level, needs per-arm N) |
+| §5.9 Statistical Analysis | ✅ Drafted | In methods.tex (placeholder-level) |
+| §5.10 Pre-registration | ✅ Drafted | In methods.tex (placeholder-level) |
+| Appendix A (CONSORT-AI) | ✅ Created | Full longtable in appendix.tex; page refs empty |
+| Appendix B (System Prompts) | ✅ Exists | In appendix.tex |
+
+### Writing approach
+
+The preferred workflow for each Methods subsection:
+1. **Discuss & brainstorm** — review methods_plan.md requirements, resolve open questions
+2. **Draft two versions** — vary structure, emphasis, or argument order
+3. **Analyse both** — identify strengths/weaknesses of each
+4. **Produce optimal version** — synthesise the best elements into the final LaTeX prose
+
+Main text carries the "why" and interpretively important content. Tedious implementation detail (platform architecture, Judge pipeline, stimulus materials, step-by-step procedure) is deferred to appendices.
+
+### Open placeholders (require decisions before finalising)
+
+| Placeholder | Decision needed | Current status |
+|---|---|---|
+| Boxplot screening | Exclusion gate or covariate-only? | PENDING — depends on pilot data |
+| Practice item count | Expand beyond 3? | Currently 3 in QUESTIONS array |
+| Post-test item count | How many held-out items? | TBD |
+| Delayed post-test timing | 7 days? 14 days? | TBD |
+| Recruitment platform | Prolific / MTurk / LinkedIn? | TBD |
+| Compensation | Amount and type | TBD |
+| Geographic region | Scope of recruitment | TBD |
+| Ethics approval | Committee + reference number | TBD |
+| Pre-registration venue | OSF vs AsPredicted | TBD |
+| Confidence scale | Single Likert item or multi-item? | TBD |
+| Generator temperature | Confirm model default behaviour | Not set client-side; Worker doesn't override |
+| Response-length matching | How was Unrestricted prompt calibrated? | Needs documentation |
+| Per-protocol threshold | What % failing Judge scores = non-compliant? | TBD |
+| Bick et al. (2024) citation | Soften "dominant tool" claim, replace, or remove? | PENDING — paper doesn't explicitly say web search is dominant; only shows 23% GenAI adoption |
+
+### References added to bib (may need completion)
+
+- `thomas2024` — **PLACEHOLDER**: needs full citation details (Thomas et al., posttest-only AI-education RCT)
+- `elkarkri2025` — **PLACEHOLDER**: needs full citation details (El Karkri et al., posttest-only LLM learning study)
+- Complete entries added: `liu2020`, `montgomery2018`, `freedland2011`, `bick2024`, `campbell1963`, `solomon1949`, `willson1982`, `roediger2006`, `hoffmann2014`
+
 ## What's still TODO
 
+### Experiment implementation
 - **Judge calibration.** Run two human coders against the 10 synthetic examples in `rct_judge_prompts.md` plus ~20 real pilot turns. Compute Cohen's κ between Judge and consensus. Targets: fidelity κ ≥ 0.75, intent κ ≥ 0.70. Log results in `rct_judge_prompts.md` → `## Calibration log`.
 - **OpenRouter spend caps** on both the generator and Judge keys.
 - **Pilot N=5–10** before opening the full trial — verify CSV export, Embedded Data shape, and the Socratic prompt's robustness against participant extraction attempts in the wild.
 - **Qualtrics CSV export verification** — confirm `InteractionLog` is one parseable JSON column and the per-turn flat fields (`prompt_1..20`, `response_1..20`, `judge_fidelity_1..20`, etc.) are populated.
+
+### Thesis writing
+- **Complete placeholder bib entries** — `thomas2024` and `elkarkri2025` need full citation details.
+- **Resolve Bick et al. citation** — current methods.tex claims web search is "the dominant information-retrieval tool" citing Bick et al. (2024), but the paper only reports 23% GenAI adoption and does not explicitly make this claim. Options: soften wording, find alternative citation, or remove and rest on Freedland (2011) + Shen & Tamkin (2026) alone.
+- **Implement revised RCT rationale** — discussed alternative structure (gold standard → identification problem → policy relevance → internal/external validity tradeoff with mitigations) but not yet written into methods.tex §5.1.
+- **Draft remaining Methods subsections** — §5.2 through §5.6 need full prose (§5.7–5.10 have placeholder-level text).
+- **Resolve open placeholders** — see table above; several depend on pilot data or logistical decisions.
