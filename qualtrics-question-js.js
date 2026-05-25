@@ -191,13 +191,16 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('cr_set',   log.cr_set || '');
 
         if (data.cr_items && Array.isArray(data.cr_items)) {
-          var prefix = (log.phase === 'train') ? 'cr_train' : 'cr_post';
+          var prefix;
+          if (log.phase === 'train') prefix = 'cr_train';
+          else if (log.phase === 'delayed') prefix = 'cr_delayed';
+          else prefix = 'cr_post';
 
           // Aggregate scores
           Q.setEmbeddedData(prefix + '_total', String(data.cr_score != null ? data.cr_score : ''));
-          if (prefix === 'cr_post') {
-            Q.setEmbeddedData('cr_post_near', String(data.cr_near != null ? data.cr_near : ''));
-            Q.setEmbeddedData('cr_post_far',  String(data.cr_far  != null ? data.cr_far  : ''));
+          if (prefix !== 'cr_train') {
+            Q.setEmbeddedData(prefix + '_near', String(data.cr_near != null ? data.cr_near : ''));
+            Q.setEmbeddedData(prefix + '_far',  String(data.cr_far  != null ? data.cr_far  : ''));
           }
 
           // Per-item fields: answer, correctness, item ID (in presentation order)
