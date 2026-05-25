@@ -1,0 +1,37 @@
+<!--
+  CR DELAYED RETEST QUALTRICS QUESTION TEXT (NOAID — all arms)
+  ====================================================================
+  Paste the single <iframe> line below into the CR Delayed Retest Text
+  Entry question's Question Text via the rich-text editor → Source
+  view (the <> button). Do NOT paste this comment.
+
+  This block is SHARED across all three arms — no arm-specific
+  branching is needed because the delayed retest is unaided (condition=NOAID).
+
+  Piped-text expressions used:
+    ${e://Field/cr_set}      → 'A' or 'B', set by the Set Assignment
+                                Randomizer (counterbalancing). Passed
+                                to embed.html so it loads the OTHER
+                                set's items as near-transfer + the 4
+                                fixed far-transfer items.
+    ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
+                                id for this response.
+
+  phase=delayed tells embed.html to:
+    1. Load the OPPOSITE set (if set=A → load Set B + far-transfer)
+    2. Hide the right panel (no tool access)
+    3. Shuffle items within the phase
+
+  Companion JS in qualtrics-question-js.js handles the postMessage
+  bridge from the iframe to Qualtrics Embedded Data.
+  ====================================================================
+-->
+<iframe
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=NOAID&phase=delayed&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}"
+  width="100%"
+  height="800"
+  frameborder="0"
+  style="border:none; display:block; width:100%; min-height:700px;"
+  allow="clipboard-write"
+  title="Critical Reasoning delayed retest (unaided)">
+</iframe>
