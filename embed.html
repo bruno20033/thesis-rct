@@ -580,7 +580,7 @@
   // user is away on the destination page. Read back on `pageshow` to
   // compute dwell time. Scoped by PID + CONDITION so a refresh in the
   // wrong condition can't pollute another participant's record.
-  var DWELL_RETURN_KEY = 'rct_pending_click_' + PID + '_' + CONDITION;
+  var DWELL_RETURN_KEY = 'rct_pending_click_' + PID + '_' + CONDITION + (PHASE ? '_' + PHASE : '');
 
   var root = document.getElementById('rct-root');
 
@@ -636,7 +636,7 @@
   /* ==================================================================
    * Per-participant local persistence (refresh resilience)
    * ================================================================== */
-  var STORAGE_KEY = 'rct_log_' + PID + '_' + CONDITION;
+  var STORAGE_KEY = 'rct_log_' + PID + '_' + CONDITION + (PHASE ? '_' + PHASE : '');
 
   function isoNow() { return new Date().toISOString(); }
 

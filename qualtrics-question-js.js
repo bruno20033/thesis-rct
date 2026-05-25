@@ -46,48 +46,54 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       var log = data.payload;
       var Q = Qualtrics.SurveyEngine;
       try {
-        Q.setEmbeddedData('InteractionLog', JSON.stringify(log));
+        // Determine field prefix from log.phase. The training phase
+        // (default / null) writes to unprefixed fields for backward compat;
+        // posttest/delayed phases prefix with the phase name so their
+        // data doesn't overwrite the training-phase fields.
+        var phase = log.phase || '';
+        var pfx = (!phase || phase === 'train') ? '' : phase + '_';
+
+        Q.setEmbeddedData(pfx + 'InteractionLog', JSON.stringify(log));
         // Analyst-friendly per-condition dictionary view (see README §
         // "interaction_log dictionary schema" for the exact shape).
         // Written alongside the rich InteractionLog JSON so analysts can
         // read prompts → responses (or queries → click lists) straight
         // out of CSV export without parsing the events array.
-        Q.setEmbeddedData('interaction_log', JSON.stringify(buildInteractionLogDict(log)));
+        Q.setEmbeddedData(pfx + 'interaction_log', JSON.stringify(buildInteractionLogDict(log)));
         Q.setEmbeddedData('condition',       log.condition || '');
         Q.setEmbeddedData('participant_id',  log.participant_id || '');
         Q.setEmbeddedData('model_used',      log.model_used || '');
-        Q.setEmbeddedData('prompt_count',    String(log.prompt_count   || 0));
-        Q.setEmbeddedData('response_count',  String(log.response_count || 0));
-        Q.setEmbeddedData('session_id',      log.session_id || '');
+        Q.setEmbeddedData(pfx + 'prompt_count',    String(log.prompt_count   || 0));
+        Q.setEmbeddedData(pfx + 'response_count',  String(log.response_count || 0));
+        Q.setEmbeddedData(pfx + 'session_id',      log.session_id || '');
         // arm: 'socratic' | 'unrestricted' for LLM condition; '' for SEARCH.
         Q.setEmbeddedData('arm',             log.arm || '');
         // Judge metadata (Socratic arm only — empty for other arms).
-        Q.setEmbeddedData('judge_model',         log.judge_model || '');
-        Q.setEmbeddedData('judge_mode',          log.judge_mode  || '');
-        Q.setEmbeddedData('judge_call_count',    String(log.judge_call_count    || 0));
-        Q.setEmbeddedData('judge_failure_count', String(log.judge_failure_count || 0));
+        Q.setEmbeddedData(pfx + 'judge_model',         log.judge_model || '');
+        Q.setEmbeddedData(pfx + 'judge_mode',          log.judge_mode  || '');
+        Q.setEmbeddedData(pfx + 'judge_call_count',    String(log.judge_call_count    || 0));
+        Q.setEmbeddedData(pfx + 'judge_failure_count', String(log.judge_failure_count || 0));
         // Multi-question progress — written on every interaction so
         // analysts can see how far each participant got (and split
         // drop-outs by which question they abandoned on).
-        Q.setEmbeddedData('current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
-        Q.setEmbeddedData('question_count',         String(log.question_count        != null ? log.question_count        : 0));
+        Q.setEmbeddedData(pfx + 'current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
+        Q.setEmbeddedData(pfx + 'question_count',         String(log.question_count        != null ? log.question_count        : 0));
         if (log.answers) {
           Object.keys(log.answers).forEach(function (qid) {
             var v = log.answers[qid];
+            // Answer fields use the question ID as the key (e.g. A-E1_answer,
+            // F-E1_answer). IDs are unique across sets, so no prefix needed.
             Q.setEmbeddedData(qid + '_answer', v === null || v === undefined ? '' : String(v));
           });
         }
 
         // -------------------------------------------------------------
-        // Flatten prompts and responses into per-turn fields and a
-        // concatenated transcript so analysts can read them straight
-        // from the Qualtrics CSV without parsing InteractionLog JSON.
-        //
-        // Per-turn fields are written for up to MAX_TURNS conversation
-        // turns. Declare prompt_1..prompt_N and response_1..response_N
-        // (and search_query_1..search_query_N) in Survey Flow's
-        // Embedded Data so they appear as CSV columns.
+        // Per-turn fields and aggregates. Only written for the training
+        // phase (LLM/SEARCH conditions have chat/search interactions).
+        // Posttest/delayed phases have no interactions to flatten, and
+        // writing them would overwrite training-phase data.
         // -------------------------------------------------------------
+        if (!pfx) {
         var MAX_TURNS = 20;
         var prompts        = [];
         var responses      = [];
@@ -173,6 +179,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
         Q.setEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
         Q.setEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
+        } // end if (!pfx) — per-turn + aggregate fields for training phase only
 
         // ---------------------------------------------------------
         // CR (Critical Reasoning) mode fields
