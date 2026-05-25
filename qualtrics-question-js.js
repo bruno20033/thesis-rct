@@ -63,16 +63,22 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         // comparison of responses collected before and after the
         // migration attempt.
         //
+        // NSE has a ~1 000-char limit per field.  Long JSON values
+        // (InteractionLog, interaction_log, all_prompts, all_responses)
+        // are truncated here.  Per-turn fields preserve the full data.
+        //
         // Fields set by Survey Flow Randomizer (condition, arm,
         // cr_set) are NOT set here — they are handled server-side.
         // -----------------------------------------------------------
-        Q.setEmbeddedData('InteractionLog', JSON.stringify(log));
+        var MAX_ED = 990; // NSE ~1000-char limit with safety margin
+        function truncED(s) { return s.length > MAX_ED ? s.slice(0, MAX_ED) + '…[TRUNC]' : s; }
+        Q.setEmbeddedData('InteractionLog', truncED(JSON.stringify(log)));
         // Analyst-friendly per-condition dictionary view (see README §
         // "interaction_log dictionary schema" for the exact shape).
         // Written alongside the rich InteractionLog JSON so analysts can
         // read prompts → responses (or queries → click lists) straight
         // out of CSV export without parsing the events array.
-        Q.setEmbeddedData('interaction_log', JSON.stringify(buildInteractionLogDict(log)));
+        Q.setEmbeddedData('interaction_log', truncED(JSON.stringify(buildInteractionLogDict(log))));
         // condition, arm, cr_set are set by Survey Flow Randomizer — not here.
         Q.setEmbeddedData('participant_id',  log.participant_id || '');
         Q.setEmbeddedData('model_used',      log.model_used || '');
@@ -134,8 +140,8 @@ Qualtrics.SurveyEngine.addOnReady(function () {
           var c = clicks[k-1];
           var d = dwells[k-1];
           var j = judgements[k-1];
-          Q.setEmbeddedData('prompt_'                   + k, prompts[k-1]   || '');
-          Q.setEmbeddedData('response_'                 + k, responses[k-1] || '');
+          Q.setEmbeddedData('prompt_'                   + k, truncED(prompts[k-1]   || ''));
+          Q.setEmbeddedData('response_'                 + k, truncED(responses[k-1] || ''));
           Q.setEmbeddedData('search_query_'             + k, queries[k-1]   || '');
           Q.setEmbeddedData('search_click_'             + k, c ? (c.url   || '') : '');
           Q.setEmbeddedData('search_click_title_'       + k, c ? (c.title || '') : '');
@@ -155,17 +161,16 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         }
 
         // Last-turn convenience fields.
-        Q.setEmbeddedData('last_prompt',        prompts[prompts.length - 1]     || '');
-        Q.setEmbeddedData('last_response',      responses[responses.length - 1] || '');
-        Q.setEmbeddedData('last_search_query',  queries[queries.length - 1]     || '');
+        Q.setEmbeddedData('last_prompt',        truncED(prompts[prompts.length - 1]     || ''));
+        Q.setEmbeddedData('last_response',      truncED(responses[responses.length - 1] || ''));
+        Q.setEmbeddedData('last_search_query',  truncED(queries[queries.length - 1]     || ''));
 
-        // Full transcripts (concatenated). Useful for a quick eyeball.
-        // Note: each Qualtrics Embedded Data field has a ~20 KB limit;
-        // for very long studies the per-turn fields above are safer.
-        Q.setEmbeddedData('all_prompts',        prompts.join('\n---\n'));
-        Q.setEmbeddedData('all_responses',      responses.join('\n---\n'));
-        Q.setEmbeddedData('all_search_queries', queries.join('\n---\n'));
-        Q.setEmbeddedData('all_clicked_urls',   clicks.map(function (x) { return x.url; }).join('\n'));
+        // Full transcripts (concatenated). Truncated to MAX_ED due to
+        // NSE ~1000-char limit. Per-turn fields above preserve the full data.
+        Q.setEmbeddedData('all_prompts',        truncED(prompts.join('\n---\n')));
+        Q.setEmbeddedData('all_responses',      truncED(responses.join('\n---\n')));
+        Q.setEmbeddedData('all_search_queries', truncED(queries.join('\n---\n')));
+        Q.setEmbeddedData('all_clicked_urls',   truncED(clicks.map(function (x) { return x.url; }).join('\n')));
 
         // Aggregates for the SEARCH condition.
         var totalDwell = dwells.reduce(function (s, x) { return s + (x.dwell_ms || 0); }, 0);
