@@ -52,62 +52,53 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       var Q = Qualtrics.SurveyEngine;
       try {
         // -----------------------------------------------------------
-        // NSE (jfe8) MIGRATION — May 2026
+        // setEmbeddedData() writes directly to the pre-declared
+        // Embedded Data fields in Survey Flow (no prefix needed).
         //
-        // setEmbeddedData() is a DEPRECATED NO-OP in NSE. Its source
-        // is literally:
-        //   ()=>{console.error("setEmbeddedData deprecated, ...")}
-        // It accepts calls without error but stores NOTHING. This was
-        // the root cause of all JS-set ED fields being empty in
-        // exports from May 24 onward.
+        // NOTE: setJSEmbeddedData() was tested and confirmed NOT to
+        // persist data in CSV/JSON exports (May 2026). It writes to
+        // __js_<fieldName> but those columns never appear in exports
+        // even with "Download all fields" checked. setEmbeddedData()
+        // is the method that actually works — verified via export
+        // comparison of responses collected before and after the
+        // migration attempt.
         //
-        // FIX: Use setJSEmbeddedData() instead. This stores data
-        // under __js_<fieldName> in the response record. For these
-        // columns to appear in CSV/JSON exports, each field must be
-        // DECLARED in Survey Flow with the __js_ prefix. E.g.:
-        //   setJSEmbeddedData('participant_id', val)
-        //   → declare __js_participant_id in Survey Flow ED block
-        //   → exports as column __js_participant_id
-        //
-        // To get clean (non-prefixed) export columns, add a SECOND
-        // ED block at the BOTTOM of Survey Flow with piped text:
-        //   participant_id = ${e://Field/__js_participant_id}
+        // NSE has a ~1 000-char limit per field.  Long JSON values
+        // (InteractionLog, interaction_log, all_prompts, all_responses)
+        // are truncated here.  Per-turn fields preserve the full data.
         //
         // Fields set by Survey Flow Randomizer (condition, arm,
-        // cr_set) are NOT set here — they persist natively.
-        //
-        // NSE has a ~1 000-char limit per field. Long JSON values
-        // are truncated here. Per-turn fields preserve full data.
+        // cr_set) are NOT set here — they are handled server-side.
         // -----------------------------------------------------------
         var MAX_ED = 990; // NSE ~1000-char limit with safety margin
         function truncED(s) { return s.length > MAX_ED ? s.slice(0, MAX_ED) + '…[TRUNC]' : s; }
-        Q.setJSEmbeddedData('InteractionLog', truncED(JSON.stringify(log)));
+        Q.setEmbeddedData('InteractionLog', truncED(JSON.stringify(log)));
         // Analyst-friendly per-condition dictionary view (see README §
         // "interaction_log dictionary schema" for the exact shape).
         // Written alongside the rich InteractionLog JSON so analysts can
         // read prompts → responses (or queries → click lists) straight
         // out of CSV export without parsing the events array.
-        Q.setJSEmbeddedData('interaction_log', truncED(JSON.stringify(buildInteractionLogDict(log))));
+        Q.setEmbeddedData('interaction_log', truncED(JSON.stringify(buildInteractionLogDict(log))));
         // condition, arm, cr_set are set by Survey Flow Randomizer — not here.
-        Q.setJSEmbeddedData('participant_id',  log.participant_id || '');
-        Q.setJSEmbeddedData('model_used',      log.model_used || '');
-        Q.setJSEmbeddedData('prompt_count',    String(log.prompt_count   || 0));
-        Q.setJSEmbeddedData('response_count',  String(log.response_count || 0));
-        Q.setJSEmbeddedData('session_id',      log.session_id || '');
+        Q.setEmbeddedData('participant_id',  log.participant_id || '');
+        Q.setEmbeddedData('model_used',      log.model_used || '');
+        Q.setEmbeddedData('prompt_count',    String(log.prompt_count   || 0));
+        Q.setEmbeddedData('response_count',  String(log.response_count || 0));
+        Q.setEmbeddedData('session_id',      log.session_id || '');
         // Judge metadata (Socratic arm only — empty for other arms).
-        Q.setJSEmbeddedData('judge_model',         log.judge_model || '');
-        Q.setJSEmbeddedData('judge_mode',          log.judge_mode  || '');
-        Q.setJSEmbeddedData('judge_call_count',    String(log.judge_call_count    || 0));
-        Q.setJSEmbeddedData('judge_failure_count', String(log.judge_failure_count || 0));
+        Q.setEmbeddedData('judge_model',         log.judge_model || '');
+        Q.setEmbeddedData('judge_mode',          log.judge_mode  || '');
+        Q.setEmbeddedData('judge_call_count',    String(log.judge_call_count    || 0));
+        Q.setEmbeddedData('judge_failure_count', String(log.judge_failure_count || 0));
         // Multi-question progress — written on every interaction so
         // analysts can see how far each participant got (and split
         // drop-outs by which question they abandoned on).
-        Q.setJSEmbeddedData('current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
-        Q.setJSEmbeddedData('question_count',         String(log.question_count        != null ? log.question_count        : 0));
+        Q.setEmbeddedData('current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
+        Q.setEmbeddedData('question_count',         String(log.question_count        != null ? log.question_count        : 0));
         if (log.answers) {
           Object.keys(log.answers).forEach(function (qid) {
             var v = log.answers[qid];
-            Q.setJSEmbeddedData(qid + '_answer', v === null || v === undefined ? '' : String(v));
+            Q.setEmbeddedData(qid + '_answer', v === null || v === undefined ? '' : String(v));
           });
         }
 
@@ -149,44 +140,44 @@ Qualtrics.SurveyEngine.addOnReady(function () {
           var c = clicks[k-1];
           var d = dwells[k-1];
           var j = judgements[k-1];
-          Q.setJSEmbeddedData('prompt_'                   + k, truncED(prompts[k-1]   || ''));
-          Q.setJSEmbeddedData('response_'                 + k, truncED(responses[k-1] || ''));
-          Q.setJSEmbeddedData('search_query_'             + k, queries[k-1]   || '');
-          Q.setJSEmbeddedData('search_click_'             + k, c ? (c.url   || '') : '');
-          Q.setJSEmbeddedData('search_click_title_'       + k, c ? (c.title || '') : '');
-          Q.setJSEmbeddedData('search_click_query_'       + k, c ? (c.query || '') : '');
-          Q.setJSEmbeddedData('search_click_index_'       + k, c ? String(c.index != null ? c.index : '') : '');
-          Q.setJSEmbeddedData('search_dwell_ms_'          + k, d && d.dwell_ms != null ? String(d.dwell_ms) : '');
+          Q.setEmbeddedData('prompt_'                   + k, truncED(prompts[k-1]   || ''));
+          Q.setEmbeddedData('response_'                 + k, truncED(responses[k-1] || ''));
+          Q.setEmbeddedData('search_query_'             + k, queries[k-1]   || '');
+          Q.setEmbeddedData('search_click_'             + k, c ? (c.url   || '') : '');
+          Q.setEmbeddedData('search_click_title_'       + k, c ? (c.title || '') : '');
+          Q.setEmbeddedData('search_click_query_'       + k, c ? (c.query || '') : '');
+          Q.setEmbeddedData('search_click_index_'       + k, c ? String(c.index != null ? c.index : '') : '');
+          Q.setEmbeddedData('search_dwell_ms_'          + k, d && d.dwell_ms != null ? String(d.dwell_ms) : '');
           // Judge per-turn fields (Socratic arm). Empty when no judge
           // event for this turn yet (e.g. judge call still in flight in
           // passive mode, or non-Socratic arm).
-          Q.setJSEmbeddedData('judge_fidelity_'           + k, j && j.fidelity_score != null ? String(j.fidelity_score) : '');
-          Q.setJSEmbeddedData('judge_intent_'             + k, j && j.intent_score   != null ? String(j.intent_score)   : '');
-          Q.setJSEmbeddedData('judge_fidelity_reasoning_' + k, j ? String(j.fidelity_reasoning || '').slice(0, 300) : '');
-          Q.setJSEmbeddedData('judge_intent_reasoning_'   + k, j ? String(j.intent_reasoning   || '').slice(0, 300) : '');
-          Q.setJSEmbeddedData('judge_status_'             + k, j ? (j.judge_status || '') : '');
-          Q.setJSEmbeddedData('judge_latency_ms_'         + k, j && j.judge_latency_ms != null ? String(j.judge_latency_ms) : '');
-          Q.setJSEmbeddedData('judge_active_regen_'       + k, j ? String(!!j.active_regen_triggered) : '');
+          Q.setEmbeddedData('judge_fidelity_'           + k, j && j.fidelity_score != null ? String(j.fidelity_score) : '');
+          Q.setEmbeddedData('judge_intent_'             + k, j && j.intent_score   != null ? String(j.intent_score)   : '');
+          Q.setEmbeddedData('judge_fidelity_reasoning_' + k, j ? String(j.fidelity_reasoning || '').slice(0, 300) : '');
+          Q.setEmbeddedData('judge_intent_reasoning_'   + k, j ? String(j.intent_reasoning   || '').slice(0, 300) : '');
+          Q.setEmbeddedData('judge_status_'             + k, j ? (j.judge_status || '') : '');
+          Q.setEmbeddedData('judge_latency_ms_'         + k, j && j.judge_latency_ms != null ? String(j.judge_latency_ms) : '');
+          Q.setEmbeddedData('judge_active_regen_'       + k, j ? String(!!j.active_regen_triggered) : '');
         }
 
         // Last-turn convenience fields.
-        Q.setJSEmbeddedData('last_prompt',        truncED(prompts[prompts.length - 1]     || ''));
-        Q.setJSEmbeddedData('last_response',      truncED(responses[responses.length - 1] || ''));
-        Q.setJSEmbeddedData('last_search_query',  truncED(queries[queries.length - 1]     || ''));
+        Q.setEmbeddedData('last_prompt',        truncED(prompts[prompts.length - 1]     || ''));
+        Q.setEmbeddedData('last_response',      truncED(responses[responses.length - 1] || ''));
+        Q.setEmbeddedData('last_search_query',  truncED(queries[queries.length - 1]     || ''));
 
         // Full transcripts (concatenated). Truncated to MAX_ED due to
         // NSE ~1000-char limit. Per-turn fields above preserve the full data.
-        Q.setJSEmbeddedData('all_prompts',        truncED(prompts.join('\n---\n')));
-        Q.setJSEmbeddedData('all_responses',      truncED(responses.join('\n---\n')));
-        Q.setJSEmbeddedData('all_search_queries', truncED(queries.join('\n---\n')));
-        Q.setJSEmbeddedData('all_clicked_urls',   truncED(clicks.map(function (x) { return x.url; }).join('\n')));
+        Q.setEmbeddedData('all_prompts',        truncED(prompts.join('\n---\n')));
+        Q.setEmbeddedData('all_responses',      truncED(responses.join('\n---\n')));
+        Q.setEmbeddedData('all_search_queries', truncED(queries.join('\n---\n')));
+        Q.setEmbeddedData('all_clicked_urls',   truncED(clicks.map(function (x) { return x.url; }).join('\n')));
 
         // Aggregates for the SEARCH condition.
         var totalDwell = dwells.reduce(function (s, x) { return s + (x.dwell_ms || 0); }, 0);
-        Q.setJSEmbeddedData('total_clicks',   String(clicks.length));
-        Q.setJSEmbeddedData('total_dwell_ms', String(totalDwell));
-        Q.setJSEmbeddedData('query_count',    String(log.query_count || 0));
-        Q.setJSEmbeddedData('click_count',    String(log.click_count || 0));
+        Q.setEmbeddedData('total_clicks',   String(clicks.length));
+        Q.setEmbeddedData('total_dwell_ms', String(totalDwell));
+        Q.setEmbeddedData('query_count',    String(log.query_count || 0));
+        Q.setEmbeddedData('click_count',    String(log.click_count || 0));
 
         // Judge aggregates for the Socratic arm. Computed only over OK
         // judgements; failures are still counted in judge_failure_count
@@ -200,11 +191,11 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         var belowThreshold = okJudgements.filter(function (x) { return x.fidelity_score < 3; }).length;
         var extractionAttempts = okJudgements.filter(function (x) { return x.intent_score === 1 || x.intent_score === 2; }).length;
         var totalJudgeLatency  = judgements.reduce(function (s, x) { return s + (x.judge_latency_ms || 0); }, 0);
-        Q.setJSEmbeddedData('judge_avg_fidelity',             okJudgements.length ? String((fidelitySum / okJudgements.length).toFixed(2)) : '');
-        Q.setJSEmbeddedData('judge_min_fidelity',             fidelityMin != null ? String(fidelityMin) : '');
-        Q.setJSEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
-        Q.setJSEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
-        Q.setJSEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
+        Q.setEmbeddedData('judge_avg_fidelity',             okJudgements.length ? String((fidelitySum / okJudgements.length).toFixed(2)) : '');
+        Q.setEmbeddedData('judge_min_fidelity',             fidelityMin != null ? String(fidelityMin) : '');
+        Q.setEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
+        Q.setEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
+        Q.setEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
 
         // ---------------------------------------------------------
         // CR (Critical Reasoning) mode fields
@@ -212,26 +203,26 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         // by embed.html's computeCRScore(). These populate the
         // cr_train_* / cr_post_* Embedded Data fields in Qualtrics.
         // ---------------------------------------------------------
-        Q.setJSEmbeddedData('cr_phase', log.phase || '');
+        Q.setEmbeddedData('cr_phase', log.phase || '');
         // cr_set is set by Survey Flow Randomizer — not duplicated here.
 
         if (data.cr_items && Array.isArray(data.cr_items)) {
           var prefix = (log.phase === 'train') ? 'cr_train' : 'cr_post';
 
           // Aggregate scores
-          Q.setJSEmbeddedData(prefix + '_total', String(data.cr_score != null ? data.cr_score : ''));
+          Q.setEmbeddedData(prefix + '_total', String(data.cr_score != null ? data.cr_score : ''));
           if (prefix === 'cr_post') {
-            Q.setJSEmbeddedData('cr_post_near', String(data.cr_near != null ? data.cr_near : ''));
-            Q.setJSEmbeddedData('cr_post_far',  String(data.cr_far  != null ? data.cr_far  : ''));
+            Q.setEmbeddedData('cr_post_near', String(data.cr_near != null ? data.cr_near : ''));
+            Q.setEmbeddedData('cr_post_far',  String(data.cr_far  != null ? data.cr_far  : ''));
           }
 
           // Per-item fields: answer, correctness, item ID (in presentation order)
           for (var ci = 0; ci < data.cr_items.length; ci++) {
             var crItem = data.cr_items[ci];
             var slot = ci + 1;  // 1-based
-            Q.setJSEmbeddedData(prefix + '_' + slot,         crItem.answer || '');
-            Q.setJSEmbeddedData(prefix + '_correct_' + slot, String(crItem.isCorrect));
-            Q.setJSEmbeddedData(prefix + '_item_' + slot,    crItem.id || '');
+            Q.setEmbeddedData(prefix + '_' + slot,         crItem.answer || '');
+            Q.setEmbeddedData(prefix + '_correct_' + slot, String(crItem.isCorrect));
+            Q.setEmbeddedData(prefix + '_item_' + slot,    crItem.id || '');
           }
 
           // Per-item timing: extract from answer_final events
@@ -247,11 +238,11 @@ Qualtrics.SurveyEngine.addOnReady(function () {
             var finalTs = answerFinals[ti].ts ? new Date(answerFinals[ti].ts).getTime() : 0;
             var startTs = startTimes[ti] || 0;
             var duration = (finalTs && startTs) ? (finalTs - startTs) : 0;
-            Q.setJSEmbeddedData(prefix + '_time_' + (ti + 1), String(duration > 0 ? duration : ''));
+            Q.setEmbeddedData(prefix + '_time_' + (ti + 1), String(duration > 0 ? duration : ''));
           }
         }
       } catch (e) {
-        console.warn('[RCT bridge] setJSEmbeddedData failed:', e);
+        console.warn('[RCT bridge] setEmbeddedData failed:', e);
       }
     }
 
