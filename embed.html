@@ -762,6 +762,34 @@
       payload.cr_items = score.items;
     }
     postToParent(payload);
+    persistToServer();  // server-side backup via Cloudflare KV
+  }
+
+  /* ==================================================================
+   * Server-side persistence — POST to Cloudflare Worker /log endpoint.
+   * Fire-and-forget: never blocks the UI, failures logged to console.
+   * ================================================================== */
+  function persistToServer() {
+    var body = { log: log };
+    if (IS_CR_MODE) {
+      var score = computeCRScore();
+      body.cr = {
+        cr_score: score.correct,
+        cr_total: score.total,
+        cr_near:  score.nearCorrect,
+        cr_near_total: score.near,
+        cr_far:   score.farCorrect,
+        cr_far_total:  score.far,
+        cr_items: score.items
+      };
+    }
+    fetch(PROXY_URL + 'log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).catch(function(e) {
+      console.warn('[RCT] server persist failed:', e);
+    });
   }
 
   function logEvent(evt) {
