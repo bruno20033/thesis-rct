@@ -93,6 +93,11 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         // Posttest/delayed phases have no interactions to flatten, and
         // writing them would overwrite training-phase data.
         // -------------------------------------------------------------
+        // Parse events BEFORE the pfx guard — events array is also
+        // needed by the CR-mode per-item timing block below (which
+        // runs for all phases, not just training).
+        var events = log.events || [];
+
         if (!pfx) {
         var MAX_TURNS = 20;
         var prompts        = [];
@@ -101,7 +106,6 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         var clicks         = [];   // result_click events    (SEARCH condition)
         var dwells         = [];   // result_dwell events    (SEARCH condition)
         var judgements     = [];   // judge_result events on initial drafts (Socratic arm)
-        var events = log.events || [];
         for (var i = 0; i < events.length; i++) {
           var ev = events[i];
           if      (ev.type === 'prompt'               && ev.content) prompts.push(ev.content);
@@ -230,6 +234,38 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         }
       } catch (e) {
         console.warn('[RCT bridge] setEmbeddedData failed:', e);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // VLAT / Mini-VLAT item-level and block-level handlers.
+    // The VLAT survey pages send vlat_item_response per item
+    // and vlat_block_complete after the last item. Each message
+    // carries the exact Embedded Data field names to write.
+    // ---------------------------------------------------------
+    if (data.type === 'vlat_item_response') {
+      var Q = Qualtrics.SurveyEngine;
+      try {
+        // Determine prefix: minivlat items use minivlat_, VLAT items use vlat_
+        var vPrefix = (data.block === 'minivlat') ? 'minivlat_' : 'vlat_';
+        Q.setEmbeddedData(vPrefix + data.itemId + '_response', String(data.response || ''));
+        Q.setEmbeddedData(vPrefix + data.itemId + '_rt',       String(data.rt       || 0));
+        Q.setEmbeddedData(vPrefix + data.itemId + '_timeout',  String(data.timeout  || false));
+      } catch (e) {
+        console.warn('[RCT bridge] vlat_item_response write failed:', e);
+      }
+    }
+
+    if (data.type === 'vlat_block_complete' && data.embeddedData) {
+      var Q = Qualtrics.SurveyEngine;
+      try {
+        // Write all pre-built Embedded Data fields from the VLAT page.
+        // These include per-item response/rt/timeout + block summaries.
+        Object.keys(data.embeddedData).forEach(function (k) {
+          Q.setEmbeddedData(k, String(data.embeddedData[k]));
+        });
+      } catch (e) {
+        console.warn('[RCT bridge] vlat_block_complete write failed:', e);
       }
     }
 
