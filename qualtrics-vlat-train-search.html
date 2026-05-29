@@ -1,0 +1,40 @@
+<!--
+  SEARCH-CONDITION QUALTRICS QUESTION TEXT (VLAT Aided Training Phase)
+  ====================================================================
+  Paste the single <iframe> line below into the SEARCH Text Entry
+  question's Question Text via the rich-text editor → Source view
+  (the <> button). Do NOT paste this comment.
+
+  This is the AIDED TRAINING phase of the data-literacy (VLAT) study —
+  the productivity measure (RQ2). It REPLACES the old unaided
+  qualtrics-vlat-practice.html block. It is a SEPARATE study from the
+  Critical-Reasoning (CR) training (qualtrics-search.html / embed.html):
+  do not mix their iframes, bridges, or Embedded Data fields.
+
+  Piped-text expressions used:
+    ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
+                                id for this response (the embed's `pid`),
+                                so all interactions are scoped per
+                                participant.
+
+  No `arm` parameter — SEARCH is the DuckDuckGo-only control and has no
+  Socratic/Unrestricted variants.
+
+  NOTE: no phase= or set= params. embed-vlat.html hardcodes
+  PHASE='vlattrain' and loads the 9 practice-block VLAT items itself;
+  there is no set counterbalancing in this phase.
+
+  Companion JS: paste qualtrics-vlat-train-js.js into this question's
+  "Add JavaScript" panel (NOT qualtrics-question-js.js — that bridge
+  would skip the per-turn interaction fields for this phase).
+  ====================================================================
+-->
+<iframe
+  src="https://bruno20033.github.io/thesis-rct/embed-vlat.html?condition=SEARCH&pid=${e://Field/ResponseID}"
+  width="100%"
+  height="800"
+  frameborder="0"
+  style="border:none; display:block; width:100%; min-height:700px;"
+  allow="clipboard-write"
+  title="Research tools — SEARCH condition (VLAT aided training)">
+</iframe>

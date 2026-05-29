@@ -1,0 +1,42 @@
+<!--
+  LLM-CONDITION QUALTRICS QUESTION TEXT (VLAT Aided Training Phase)
+  ====================================================================
+  Paste the single <iframe> line below into the LLM Text Entry
+  question's Question Text via the rich-text editor → Source view
+  (the <> button). Do NOT paste this comment.
+
+  This is the AIDED TRAINING phase of the data-literacy (VLAT) study —
+  the productivity measure (RQ2). It REPLACES the old unaided
+  qualtrics-vlat-practice.html block. It is a SEPARATE study from the
+  Critical-Reasoning (CR) training (qualtrics-llm.html / embed.html):
+  do not mix their iframes, bridges, or Embedded Data fields.
+
+  This same question serves BOTH LLM arms — Socratic and Unrestricted.
+  The Survey Flow Randomizer sets the `arm` Embedded Data field per
+  branch (arm = socratic | unrestricted); the iframe pipes that value
+  into the embed via ${e://Field/arm}.
+
+  Piped-text expressions used:
+    ${e://Field/arm}         → 'socratic' or 'unrestricted', set by
+                                the Randomizer's Embedded-Data step.
+    ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
+                                id for this response (the embed's `pid`).
+
+  NOTE: no phase= or set= params. embed-vlat.html hardcodes
+  PHASE='vlattrain' and loads the 9 practice-block VLAT items itself;
+  there is no set counterbalancing in this phase.
+
+  Companion JS: paste qualtrics-vlat-train-js.js into this question's
+  "Add JavaScript" panel (NOT qualtrics-question-js.js — that bridge
+  would skip the per-turn interaction fields for this phase).
+  ====================================================================
+-->
+<iframe
+  src="https://bruno20033.github.io/thesis-rct/embed-vlat.html?condition=LLM&arm=${e://Field/arm}&pid=${e://Field/ResponseID}"
+  width="100%"
+  height="800"
+  frameborder="0"
+  style="border:none; display:block; width:100%; min-height:700px;"
+  allow="clipboard-write"
+  title="Research tools — LLM condition (VLAT aided training)">
+</iframe>
