@@ -447,6 +447,151 @@
   // Early URL-param reader for phase/set (needed before QUESTIONS is built).
   // The full getParam function is defined later; this is a minimal inline version.
   var _p = new URLSearchParams(location.search);
+
+  // ── Language ──
+  // Passed in from Qualtrics via &lang=${e://Field/Q_Language} so the iframe
+  // UI follows the participant's chosen survey language. Qualtrics codes look
+  // like 'EN', 'DE', 'DE-DE' — we key off the first two letters. Anything we
+  // don't have a dictionary for falls back to 'EN'.
+  var LANG = ((_p.get('lang') || 'EN').slice(0, 2)).toUpperCase();
+  if (LANG !== 'DE') LANG = 'EN';
+  try { document.documentElement.lang = LANG.toLowerCase(); } catch (_) {}
+
+  // loc(obj, field): return the localized variant obj[field + '_de'] when in
+  // German and present, else the English source field. Used for item/chart
+  // display text. English remains canonical for logging.
+  function loc(o, field) {
+    if (LANG === 'DE' && o && o[field + '_de'] != null) return o[field + '_de'];
+    return o ? o[field] : undefined;
+  }
+
+  /* ==================================================================
+   * UI string table (chrome only — VLAT/CR item text comes from the data
+   * files via loc()). t('key') returns the LANG string, falling back to EN,
+   * then the key. tf('key', {n:1}) does the same with {placeholder} subst.
+   * ================================================================== */
+  var I18N = {
+    EN: {
+      instr_title: 'Instructions',
+      instr_cr_noaid: 'For each question below, read the argument passage carefully and select the best answer from the five options (A–E). No external tools are available for this section. Take your time and reason through each argument before answering.',
+      instr_cr_search: 'For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>search panel</strong> on the right to look up information that helps you reason through the argument. Take your time.',
+      instr_cr_llm: 'For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>assistant</strong> on the right to help you reason through the argument. Take your time.',
+      instr_vlat_noaid: 'For each chart below, read the question carefully and select the best answer. Some questions are multiple-choice; others ask whether a statement is <strong>True</strong> or <strong>False</strong>. No external tools are available for this section.',
+      instr_vlat_search: 'For each chart below, read the question and select the best answer (some are multiple-choice, others True/False). You may use the <strong>search panel</strong> on the right to look up how to read the chart or find supporting information. Take your time.',
+      instr_vlat_llm: 'For each chart below, read the question and select the best answer (some are multiple-choice, others True/False). You may use the <strong>assistant</strong> on the right to help you reason about the chart. Take your time.',
+      pane_vlat: 'Chart',
+      pane_cr: 'Logical Reasoning',
+      pane_company: 'Company performance',
+      pane_tools: 'Research tools',
+      aria_left_vlat: 'Chart and task question',
+      aria_left_cr: 'Argument and task questions',
+      aria_left_chart: 'Chart and task questions',
+      aria_right: 'Information retrieval',
+      aria_chat_log: 'Chat transcript',
+      chat_placeholder_cr: 'Ask the assistant about the argument…',
+      chat_placeholder_chart: 'Ask the assistant about the chart…',
+      typing: 'Assistant is typing…',
+      send: 'Send',
+      share_chart: 'Share chart with assistant',
+      share_chart_title: 'Send the chart image and data to the assistant as context for the next message.',
+      share_done: '✓ Chart shared',
+      share_chip: 'Chart and chart data shared with the assistant.',
+      share_attached: 'Attached — included with your next message.',
+      share_render_err: 'Could not render chart image ({msg}).',
+      search_placeholder: 'Search the web…',
+      search_btn: 'Search',
+      searching: 'Searching…',
+      search_unavailable_cr: 'Search is temporarily unavailable. Please try again, or answer based on the argument alone.',
+      search_unavailable_chart: 'Search is temporarily unavailable. Please try again, or answer based on the chart alone.',
+      error_prefix: 'Error: ',
+      search_back: '← Back to results',
+      search_back_aria: 'Back to results',
+      search_newtab: 'Open in new tab ↗',
+      result_blocked: '<strong>This site refused to be embedded.</strong> Click <strong>Open in new tab ↗</strong> above to read it in a new tab — your task and chart on the left will stay where they are. Your time on the new tab is still recorded.',
+      no_results: 'No results for ',
+      results_count: '{n} results for ',
+      q_progress: 'Question {n} of {m}',
+      idk: 'I don\'t know',
+      tf_true: 'True',
+      tf_false: 'False',
+      btn_finish: 'Finish',
+      btn_next: 'Next question →',
+      hint_finish: 'You can change your selection until you click Finish.',
+      hint_next: 'You can change your selection until you click Next question.',
+      submitted: 'Submitted',
+      all_recorded: 'All answers recorded. Click Next to continue.',
+      answer_submitted: 'Answer submitted',
+      answer_recorded: 'Your answer has been recorded. Click Next to continue.',
+      chat_unreachable: 'Could not reach the assistant: ',
+      chart_unavailable: 'Chart image unavailable',
+      placeholder_item: 'Placeholder item — scoring excluded'
+    },
+    DE: {
+      instr_title: 'Anweisungen',
+      instr_cr_noaid: 'Lesen Sie bei jeder Frage den Argumenttext sorgfältig und wählen Sie die beste Antwort aus den fünf Optionen (A–E). Für diesen Abschnitt stehen keine externen Hilfsmittel zur Verfügung. Nehmen Sie sich Zeit und durchdenken Sie jedes Argument, bevor Sie antworten.',
+      instr_cr_search: 'Lesen Sie bei jeder Frage den Argumenttext und wählen Sie die beste Antwort aus den fünf Optionen (A–E). Sie dürfen das <strong>Suchfeld</strong> rechts nutzen, um Informationen nachzuschlagen, die Ihnen beim Durchdenken des Arguments helfen. Nehmen Sie sich Zeit.',
+      instr_cr_llm: 'Lesen Sie bei jeder Frage den Argumenttext und wählen Sie die beste Antwort aus den fünf Optionen (A–E). Sie dürfen den <strong>Assistenten</strong> rechts nutzen, um das Argument zu durchdenken. Nehmen Sie sich Zeit.',
+      instr_vlat_noaid: 'Lesen Sie bei jedem Diagramm die Frage sorgfältig und wählen Sie die beste Antwort. Einige Fragen sind Multiple-Choice; bei anderen sollen Sie entscheiden, ob eine Aussage <strong>Wahr</strong> oder <strong>Falsch</strong> ist. Für diesen Abschnitt stehen keine externen Hilfsmittel zur Verfügung.',
+      instr_vlat_search: 'Lesen Sie bei jedem Diagramm die Frage und wählen Sie die beste Antwort (einige sind Multiple-Choice, andere Wahr/Falsch). Sie dürfen das <strong>Suchfeld</strong> rechts nutzen, um nachzuschlagen, wie das Diagramm zu lesen ist, oder um unterstützende Informationen zu finden. Nehmen Sie sich Zeit.',
+      instr_vlat_llm: 'Lesen Sie bei jedem Diagramm die Frage und wählen Sie die beste Antwort (einige sind Multiple-Choice, andere Wahr/Falsch). Sie dürfen den <strong>Assistenten</strong> rechts nutzen, um über das Diagramm nachzudenken. Nehmen Sie sich Zeit.',
+      pane_vlat: 'Diagramm',
+      pane_cr: 'Logisches Denken',
+      pane_company: 'Unternehmensleistung',
+      pane_tools: 'Recherche-Werkzeuge',
+      aria_left_vlat: 'Diagramm und Aufgabenfrage',
+      aria_left_cr: 'Argument und Aufgabenfragen',
+      aria_left_chart: 'Diagramm und Aufgabenfragen',
+      aria_right: 'Informationsbeschaffung',
+      aria_chat_log: 'Chat-Verlauf',
+      chat_placeholder_cr: 'Fragen Sie den Assistenten zum Argument…',
+      chat_placeholder_chart: 'Fragen Sie den Assistenten zum Diagramm…',
+      typing: 'Der Assistent schreibt…',
+      send: 'Senden',
+      share_chart: 'Diagramm mit Assistent teilen',
+      share_chart_title: 'Senden Sie das Diagrammbild und die Daten als Kontext für die nächste Nachricht an den Assistenten.',
+      share_done: '✓ Diagramm geteilt',
+      share_chip: 'Diagramm und Diagrammdaten wurden mit dem Assistenten geteilt.',
+      share_attached: 'Angehängt — wird mit Ihrer nächsten Nachricht gesendet.',
+      share_render_err: 'Diagrammbild konnte nicht gerendert werden ({msg}).',
+      search_placeholder: 'Im Web suchen…',
+      search_btn: 'Suchen',
+      searching: 'Suche läuft…',
+      search_unavailable_cr: 'Die Suche ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut oder beantworten Sie die Frage allein anhand des Arguments.',
+      search_unavailable_chart: 'Die Suche ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut oder beantworten Sie die Frage allein anhand des Diagramms.',
+      error_prefix: 'Fehler: ',
+      search_back: '← Zurück zu den Ergebnissen',
+      search_back_aria: 'Zurück zu den Ergebnissen',
+      search_newtab: 'In neuem Tab öffnen ↗',
+      result_blocked: '<strong>Diese Seite kann nicht eingebettet werden.</strong> Klicken Sie oben auf <strong>In neuem Tab öffnen ↗</strong>, um sie in einem neuen Tab zu lesen — Ihre Aufgabe und Ihr Diagramm links bleiben erhalten. Ihre Zeit im neuen Tab wird weiterhin erfasst.',
+      no_results: 'Keine Ergebnisse für ',
+      results_count: '{n} Ergebnisse für ',
+      q_progress: 'Frage {n} von {m}',
+      idk: 'Ich weiß es nicht',
+      tf_true: 'Wahr',
+      tf_false: 'Falsch',
+      btn_finish: 'Fertig',
+      btn_next: 'Nächste Frage →',
+      hint_finish: 'Sie können Ihre Auswahl ändern, bis Sie auf „Fertig" klicken.',
+      hint_next: 'Sie können Ihre Auswahl ändern, bis Sie auf „Nächste Frage" klicken.',
+      submitted: 'Übermittelt',
+      all_recorded: 'Alle Antworten wurden gespeichert. Klicken Sie auf „Weiter", um fortzufahren.',
+      answer_submitted: 'Antwort übermittelt',
+      answer_recorded: 'Ihre Antwort wurde gespeichert. Klicken Sie auf „Weiter", um fortzufahren.',
+      chat_unreachable: 'Der Assistent ist nicht erreichbar: ',
+      chart_unavailable: 'Diagrammbild nicht verfügbar',
+      placeholder_item: 'Platzhalter-Item — von der Bewertung ausgeschlossen'
+    }
+  };
+  function t(key) {
+    var s = (I18N[LANG] && I18N[LANG][key]);
+    if (s == null) s = I18N.EN[key];
+    return s == null ? key : s;
+  }
+  function tf(key, map) {
+    var s = t(key);
+    if (map) { for (var k in map) { if (map.hasOwnProperty(k)) s = s.replace('{' + k + '}', map[k]); } }
+    return s;
+  }
   // ── Mode: this engine is the VLAT aided-training phase. ──────────────
   // It NEVER serves the verbal Critical-Reasoning items (those live in the
   // separate, active embed.html). CR mode is hard-disabled here; VLAT mode
@@ -533,11 +678,11 @@
           raw_id:     it.id,                   // original VLAT numbering (offline scoring)
           type:       'vlat',
           format:     (it.questionFormat === 'tf') ? 'tf' : 'mc',
-          text:       it.questionText,
+          text:       loc(it, 'questionText'),
           chartId:    it.chartId,
           chartType:  it.chartType,
-          chartTitle: (charts[it.chartId] && charts[it.chartId].title) || it.chartType || 'Chart',
-          options:    (it.options || []).map(function (o) { return { key: o.label, text: o.text }; }),
+          chartTitle: (charts[it.chartId] && loc(charts[it.chartId], 'title')) || it.chartType || 'Chart',
+          options:    (it.options || []).map(function (o) { return { key: o.label, text: loc(o, 'text') }; }),
           hasOmit:    it.hasOmit !== false
         };
       });
@@ -637,36 +782,25 @@
 
   /* Instructions text — must be defined AFTER CONDITION is parsed above */
   var INSTRUCTIONS_HTML;
+  var _instrTitle = '<h2 class="rct-instructions-title">' + esc(t('instr_title')) + '</h2>';
   if (IS_CR_MODE) {
     if (CONDITION === 'NOAID') {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each question below, read the argument passage carefully and select the best answer from the five options (A–E). No external tools are available for this section. Take your time and reason through each argument before answering.</p>';
+      INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t('instr_cr_noaid') + '</p>';
     } else if (CONDITION === 'SEARCH') {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>search panel</strong> on the right to look up information that helps you reason through the argument. Take your time.</p>';
+      INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t('instr_cr_search') + '</p>';
     } else {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>assistant</strong> on the right to help you reason through the argument. Take your time.</p>';
+      INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t('instr_cr_llm') + '</p>';
     }
   } else {
     // VLAT aided-training instructions (chart-image mode). Items are a mix
     // of multiple-choice and True/False. The right-hand tool depends on the
     // randomised arm: a web-search panel (SEARCH) or an AI assistant (LLM).
     if (CONDITION === 'NOAID') {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each chart below, read the question carefully and select the best answer. Some questions are multiple-choice; others ask whether a statement is <strong>True</strong> or <strong>False</strong>. No external tools are available for this section.</p>';
+      INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t('instr_vlat_noaid') + '</p>';
     } else if (CONDITION === 'SEARCH') {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each chart below, read the question and select the best answer (some are multiple-choice, others True/False). You may use the <strong>search panel</strong> on the right to look up how to read the chart or find supporting information. Take your time.</p>';
+      INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t('instr_vlat_search') + '</p>';
     } else {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each chart below, read the question and select the best answer (some are multiple-choice, others True/False). You may use the <strong>assistant</strong> on the right to help you reason about the chart. Take your time.</p>';
+      INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t('instr_vlat_llm') + '</p>';
     }
   }
 
@@ -923,33 +1057,33 @@
       // probe-only scaffold the Socratic prompt enforces.
       var shareToolbarHtml = (!IS_CR_MODE && ARM === 'unrestricted')
         ? '<div id="rct-share-toolbar">' +
-            '<button id="rct-share-chart-btn" type="button" class="rct-button rct-button-secondary" title="Send the chart image and data to the assistant as context for the next message.">' +
-              '<span aria-hidden="true" style="margin-right:6px">📊</span>Share chart with assistant' +
+            '<button id="rct-share-chart-btn" type="button" class="rct-button rct-button-secondary" title="' + esc(t('share_chart_title')) + '">' +
+              '<span aria-hidden="true" style="margin-right:6px">📊</span>' + esc(t('share_chart')) +
             '</button>' +
             '<span id="rct-share-chart-status" aria-live="polite"></span>' +
           '</div>'
         : '';
       var chatPlaceholder = IS_CR_MODE
-        ? 'Ask the assistant about the argument…'
-        : 'Ask the assistant about the chart…';
+        ? t('chat_placeholder_cr')
+        : t('chat_placeholder_chart');
       rightHtml =
         '<div id="right-panel-llm">' +
-          '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="Chat transcript"></div>' +
-          '<div id="rct-chat-typing" style="display:none">Assistant is typing…</div>' +
+          '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="' + esc(t('aria_chat_log')) + '"></div>' +
+          '<div id="rct-chat-typing" style="display:none">' + esc(t('typing')) + '</div>' +
           shareToolbarHtml +
           '<form id="rct-chat-form" autocomplete="off">' +
             '<input id="rct-chat-input" type="text" placeholder="' + esc(chatPlaceholder) + '" maxlength="1000" />' +
-            '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">Send</button>' +
+            '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">' + esc(t('send')) + '</button>' +
           '</form>' +
         '</div>';
     } else {
       rightHtml =
         '<div id="right-panel-search">' +
           '<form id="rct-search-form" autocomplete="off" role="search">' +
-            '<input id="rct-search-input" type="text" placeholder="Search the web…" maxlength="200" />' +
-            '<button id="rct-search-button" type="submit" class="rct-button rct-button-primary">Search</button>' +
+            '<input id="rct-search-input" type="text" placeholder="' + esc(t('search_placeholder')) + '" maxlength="200" />' +
+            '<button id="rct-search-button" type="submit" class="rct-button rct-button-primary">' + esc(t('search_btn')) + '</button>' +
           '</form>' +
-          '<div id="rct-search-spinner" style="display:none">Searching…</div>' +
+          '<div id="rct-search-spinner" style="display:none">' + esc(t('searching')) + '</div>' +
           '<div id="rct-search-results" aria-live="polite"></div>' +
           // In-panel result viewer (hidden until a click). Loads the
           // destination URL inside the right pane so the chart +
@@ -957,19 +1091,19 @@
           // iframing trigger the .is-blocked fallback.
           '<div id="rct-result-frame-container" aria-live="polite">' +
             '<div class="rct-result-frame-bar">' +
-              '<button id="rct-result-frame-back" type="button" aria-label="Back to results">← Back to results</button>' +
+              '<button id="rct-result-frame-back" type="button" aria-label="' + esc(t('search_back_aria')) + '">' + esc(t('search_back')) + '</button>' +
               '<span id="rct-result-frame-url" title=""></span>' +
-              '<a id="rct-result-frame-newtab" href="#" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>' +
+              '<a id="rct-result-frame-newtab" href="#" target="_blank" rel="noopener noreferrer">' + esc(t('search_newtab')) + '</a>' +
             '</div>' +
             '<iframe id="rct-result-frame" src="about:blank" referrerpolicy="no-referrer" loading="lazy" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>' +
             '<div id="rct-result-frame-blocked">' +
-              '<strong>This site refused to be embedded.</strong> Click <strong>Open in new tab ↗</strong> above to read it in a new tab — your task and chart on the left will stay where they are. Your time on the new tab is still recorded.' +
+              t('result_blocked') +
             '</div>' +
           '</div>' +
         '</div>';
     }
-    var leftPaneHeader = IS_VLAT_MODE ? 'Chart' : (IS_CR_MODE ? 'Logical Reasoning' : 'Company performance');
-    var leftPaneLabel = IS_VLAT_MODE ? 'Chart and task question' : (IS_CR_MODE ? 'Argument and task questions' : 'Chart and task questions');
+    var leftPaneHeader = IS_VLAT_MODE ? t('pane_vlat') : (IS_CR_MODE ? t('pane_cr') : t('pane_company'));
+    var leftPaneLabel = IS_VLAT_MODE ? t('aria_left_vlat') : (IS_CR_MODE ? t('aria_left_cr') : t('aria_left_chart'));
     root.innerHTML =
       '<header class="rct-instructions">' + INSTRUCTIONS_HTML + '</header>' +
       '<div class="rct-panes">' +
@@ -979,8 +1113,8 @@
           '<div class="rct-chart-area" id="chart-root"></div>' +
           '<div class="rct-question-block" id="question-area"></div>' +
         '</section>' +
-        '<section class="rct-pane rct-right" aria-label="Information retrieval">' +
-          '<div class="rct-pane-header">Research tools</div>' +
+        '<section class="rct-pane rct-right" aria-label="' + esc(t('aria_right')) + '">' +
+          '<div class="rct-pane-header">' + esc(t('pane_tools')) + '</div>' +
           rightHtml +
         '</section>' +
       '</div>';
@@ -1094,7 +1228,7 @@
              'alt="' + esc(q.chartType + ': ' + title) + '" ' +
              'style="width:100%;height:auto;display:block;border:1px solid #eceff1;border-radius:4px;background:#fff" ' +
              'onerror="this.style.display=\'none\';var f=this.parentNode.querySelector(\'.vlat-chart-missing\');if(f)f.style.display=\'block\';" />' +
-        '<div class="vlat-chart-missing" style="display:none;padding:32px;text-align:center;color:#90a4ae;border:1px dashed #cfd8dc;border-radius:4px">Chart image unavailable<br/><code style="font-size:11px">charts/' + esc(q.chartId) + '.png</code></div>' +
+        '<div class="vlat-chart-missing" style="display:none;padding:32px;text-align:center;color:#90a4ae;border:1px dashed #cfd8dc;border-radius:4px">' + esc(t('chart_unavailable')) + '<br/><code style="font-size:11px">charts/' + esc(q.chartId) + '.png</code></div>' +
         '<figcaption style="margin-top:6px;font-size:12px;color:#607d8b">' + esc(q.chartType) + '</figcaption>' +
       '</figure>';
     postHeight();
@@ -1108,7 +1242,7 @@
     if (!q || q.type !== 'cr') { stemHolder.innerHTML = ''; return; }
     var html = '';
     if (q.placeholder) {
-      html += '<p class="cr-item-meta">Placeholder item — scoring excluded</p>';
+      html += '<p class="cr-item-meta">' + esc(t('placeholder_item')) + '</p>';
     }
     html += '<p class="cr-stem-text">' + esc(q.stem) + '</p>';
     html += '<p class="cr-prompt-text">' + esc(q.prompt) + '</p>';
@@ -1126,7 +1260,7 @@
     if (IS_CR_MODE) renderCRStem(q);
 
     var html = '';
-    html += '<p class="rct-question-progress">Question ' + (idx + 1) + ' of ' + QUESTIONS.length + '</p>';
+    html += '<p class="rct-question-progress">' + esc(tf('q_progress', { n: idx + 1, m: QUESTIONS.length })) + '</p>';
     html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
 
     if (q.type === 'cr') {
@@ -1137,7 +1271,7 @@
       q.options.forEach(function (opt) {
         html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(opt.key + ') ' + opt.text) + '</span></label>';
       });
-      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>I don\'t know</span></label>';
+      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>' + esc(t('idk')) + '</span></label>';
       html += '</div>';
     } else if (q.type === 'vlat') {
       // VLAT mode: chart shown above (renderVLATChart); here we render the
@@ -1150,7 +1284,7 @@
         html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(display) + '</span></label>';
       });
       if (q.hasOmit) {
-        html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>I don\'t know</span></label>';
+        html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>' + esc(t('idk')) + '</span></label>';
       }
       html += '</div>';
     } else {
@@ -1163,19 +1297,17 @@
           html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(opt.key + ') ' + opt.text) + '</span></label>';
         });
       } else if (q.type === 'truefalse') {
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>';
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>' + esc(t('tf_true')) + '</span></label>';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>' + esc(t('tf_false')) + '</span></label>';
       }
-      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>I don\'t know</span></label>';
+      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>' + esc(t('idk')) + '</span></label>';
       html += '</div>';
     }
     html += '</div>';
-    var btnLabel = isLastQuestion() ? 'Finish' : 'Next question →';
-    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + btnLabel + '</button>';
-    var hintText = isLastQuestion()
-      ? 'You can change your selection until you click Finish.'
-      : 'You can change your selection until you click Next question.';
-    html += '<p class="rct-submit-hint">' + hintText + '</p>';
+    var btnLabel = isLastQuestion() ? t('btn_finish') : t('btn_next');
+    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + esc(btnLabel) + '</button>';
+    var hintText = isLastQuestion() ? t('hint_finish') : t('hint_next');
+    html += '<p class="rct-submit-hint">' + esc(hintText) + '</p>';
     holder.innerHTML = html;
 
     $$('input[name="' + name + '"]').forEach(function (input) {
@@ -1249,10 +1381,10 @@
       persist();
       postToParent({ type: 'rct_complete' });
       var btn = $('#rct-submit-final');
-      if (btn) { btn.disabled = true; btn.textContent = 'Submitted'; }
+      if (btn) { btn.disabled = true; btn.textContent = t('submitted'); }
       $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
       var hint = $('.rct-submit-hint');
-      if (hint) hint.textContent = 'All answers recorded. Click Next to continue.';
+      if (hint) hint.textContent = t('all_recorded');
       postHeight();
     } else {
       // Advance to the next question.
@@ -1378,11 +1510,11 @@
     }
     if (currentQuestionAlreadyShared()) {
       btn.disabled = true;
-      btn.textContent = '✓ Chart shared';
+      btn.textContent = t('share_done');
       if (status) { status.textContent = ''; status.classList.remove('is-error'); }
     } else {
       btn.disabled = false;
-      btn.innerHTML = '<span aria-hidden="true" style="margin-right:6px">📊</span>Share chart with assistant';
+      btn.innerHTML = '<span aria-hidden="true" style="margin-right:6px">📊</span>' + esc(t('share_chart'));
       if (status) { status.textContent = ''; status.classList.remove('is-error'); }
     }
   }
@@ -1395,15 +1527,15 @@
     var renderPng = IS_VLAT_MODE ? rctRenderVLATChartPng : rctRenderChartPng;
     renderPng(q.id).then(function () {
       logEvent({ type: 'context_share', question_id: q.id });
-      appendContextChip('Chart and chart data shared with the assistant.');
+      appendContextChip(t('share_chip'));
       persist();
       refreshShareChartUI();
-      if (status) status.textContent = 'Attached — included with your next message.';
+      if (status) status.textContent = t('share_attached');
     }).catch(function (err) {
       var btn = $('#rct-share-chart-btn');
       if (btn) btn.disabled = false;
       if (status) {
-        status.textContent = 'Could not render chart image (' + (err && err.message || 'unknown') + ').';
+        status.textContent = tf('share_render_err', { msg: (err && err.message || 'unknown') });
         status.classList.add('is-error');
       }
     });
@@ -1432,8 +1564,8 @@
       if (RESET_CHAT_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) return;
       if (e.type === 'prompt') appendBubble('user', e.content);
       else if (e.type === 'response') appendBubble('assistant', e.content);
-      else if (e.type === 'error' && e.error) appendBubble('error', 'Error: ' + e.error);
-      else if (e.type === 'context_share') appendContextChip('Chart and chart data shared with the assistant.');
+      else if (e.type === 'error' && e.error) appendBubble('error', t('error_prefix') + e.error);
+      else if (e.type === 'context_share') appendContextChip(t('share_chip'));
     });
   }
 
@@ -1940,7 +2072,7 @@
     var draft = await rctGenerateChatReply(messages, MODEL);
     if (draft.error) {
       logEvent({ type: 'error', error: draft.error, http_status: draft.http_status, latency_ms: draft.latency_ms });
-      appendBubble('error', 'Could not reach the assistant: ' + draft.error);
+      appendBubble('error', t('chat_unreachable') + draft.error);
       setChatBusy(false);
       persist();
       return;
@@ -2121,8 +2253,8 @@
           latency_ms: latency
         });
         showSearchError(IS_CR_MODE
-          ? 'Search is temporarily unavailable. Please try again, or answer based on the argument alone.'
-          : 'Search is temporarily unavailable. Please try again, or answer based on the chart alone.');
+          ? t('search_unavailable_cr')
+          : t('search_unavailable_chart'));
       }
       setSearchBusy(false);
       persist();
@@ -2133,11 +2265,11 @@
     var holder = $('#rct-search-results');
     if (!holder) return;
     if (!results.length) {
-      holder.innerHTML = '<p class="rct-search-meta">No results for <strong>' + esc(query) + '</strong>.</p>';
+      holder.innerHTML = '<p class="rct-search-meta">' + esc(t('no_results')) + '<strong>' + esc(query) + '</strong>.</p>';
       postHeight();
       return;
     }
-    var html = '<p class="rct-search-meta">' + results.length + ' results for <strong>' + esc(query) + '</strong></p>';
+    var html = '<p class="rct-search-meta">' + esc(tf('results_count', { n: results.length })) + '<strong>' + esc(query) + '</strong></p>';
     results.forEach(function (r, idx) {
       html += '<div class="rct-search-result" data-idx="' + idx + '">' +
                 '<div class="rct-search-url">' + esc(r.displayUrl || r.url) + '</div>' +
@@ -2330,10 +2462,10 @@
   if (isFinalised()) {
     lockPanel();
     var btn = $('#rct-submit-final');
-    if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
+    if (btn) { btn.disabled = true; btn.textContent = t('answer_submitted'); }
     $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
     var hint = $('.rct-submit-hint');
-    if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+    if (hint) hint.textContent = t('answer_recorded');
     postToParent({ type: 'rct_complete' });
   }
 

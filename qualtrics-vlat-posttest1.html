@@ -59,7 +59,7 @@
 <div id="quiz-container">
   <div class="top-bar">
     <div>
-      <div class="progress">Question <span id="q-current">1</span> of <span id="q-total">?</span></div>
+      <div class="progress"><span id="lbl-question">Question</span> <span id="q-current">1</span> <span id="lbl-of">of</span> <span id="q-total">?</span></div>
       <div class="progress-bar"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
     </div>
     <div id="timer" class="timer">25s</div>
@@ -72,8 +72,8 @@
 </div>
 
 <div id="complete-screen" class="complete-screen" style="display:none">
-  <h2>Block Complete</h2>
-  <p>Your responses have been recorded. Please wait...</p>
+  <h2 id="complete-title">Block Complete</h2>
+  <p id="complete-body">Your responses have been recorded. Please wait...</p>
 </div>
 
 <script src="vlat_items_data.js"></script>
@@ -87,9 +87,35 @@
   var params = new URLSearchParams(window.location.search);
   var pid = params.get('pid') || 'default';
 
+  // ── Language (mirrors embed.html) ──
+  // Passed from Qualtrics via &lang=${e://Field/Q_Language}. Key off the
+  // first two letters ('EN', 'DE', 'DE-DE'); anything else falls back to EN.
+  var LANG = ((params.get('lang') || 'EN').slice(0, 2)).toUpperCase();
+  if (LANG !== 'DE') LANG = 'EN';
+  try { document.documentElement.lang = LANG.toLowerCase(); } catch (_) {}
+
+  // Resolve a localized field with English fallback (e.g. loc(item,'questionText')).
+  function loc(o, field) {
+    if (LANG === 'DE' && o && o[field + '_de'] != null) return o[field + '_de'];
+    return o ? o[field] : undefined;
+  }
+
+  // Static UI strings.
+  var UI = {
+    EN: { question: 'Question', of: 'of', next: 'Next', idk: "I don't know",
+          completeTitle: 'Block Complete',
+          completeBody: 'Your responses have been recorded. Please wait...',
+          noItems: 'No items found for block: ', chartFail: 'Chart image not loaded — ' },
+    DE: { question: 'Frage', of: 'von', next: 'Weiter', idk: 'Ich weiß es nicht',
+          completeTitle: 'Block abgeschlossen',
+          completeBody: 'Ihre Antworten wurden gespeichert. Bitte warten …',
+          noItems: 'Keine Items für diesen Block gefunden: ', chartFail: 'Diagrammbild nicht geladen — ' }
+  };
+  function t(k) { return (UI[LANG] && UI[LANG][k] != null) ? UI[LANG][k] : UI.EN[k]; }
+
   // ── Filter items for this block ──
   var items = VLAT_ITEMS.filter(function (i) { return i.block === BLOCK; });
-  if (items.length === 0) { document.body.innerHTML = '<p>No items found for block: ' + BLOCK + '</p>'; return; }
+  if (items.length === 0) { document.body.innerHTML = '<p>' + t('noItems') + BLOCK + '</p>'; return; }
 
   // ── Seeded shuffle ──
   function seededRandom(seed) {
@@ -139,6 +165,16 @@
 
   elTotal.textContent = String(items.length);
 
+  // Apply static UI labels for the current language.
+  (function applyUiLabels() {
+    var set = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+    set('lbl-question', t('question'));
+    set('lbl-of', t('of'));
+    set('complete-title', t('completeTitle'));
+    set('complete-body', t('completeBody'));
+    if (elNext) elNext.textContent = t('next');
+  })();
+
   // ── Post to parent (Qualtrics) ──
   function post(msg) {
     try { window.parent.postMessage(msg, '*'); } catch (e) { /* sandbox */ }
@@ -161,15 +197,15 @@
 
     // Chart
     var chartInfo = VLAT_CHARTS[item.chartId];
-    var chartTitle = chartInfo ? chartInfo.title : item.chartId;
+    var chartTitle = chartInfo ? loc(chartInfo, 'title') : item.chartId;
     var imgPath = 'charts/' + item.chartId + '.png';
 
     elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escHtml(chartTitle) + '" ' +
       'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' +
-      escHtml(chartTitle) + '</div><div class=hint>[Chart image not loaded — ' + escHtml(item.chartType) + ']</div></div>\'">';
+      escHtml(chartTitle) + '</div><div class=hint>[' + escHtml(t('chartFail')) + escHtml(item.chartType) + ']</div></div>\'">';
 
     // Question
-    elQuestion.textContent = item.questionText;
+    elQuestion.textContent = loc(item, 'questionText');
 
     // Options
     var html = '';
@@ -177,13 +213,13 @@
       var opt = item.options[i];
       html += '<li class="option" data-value="' + escAttr(opt.label) + '" onclick="selectOption(this)">';
       html += '<input type="radio" name="answer" id="opt_' + i + '">';
-      html += '<label for="opt_' + i + '"><span class="label-key">' + escHtml(opt.label) + '</span>' + escHtml(opt.text) + '</label>';
+      html += '<label for="opt_' + i + '"><span class="label-key">' + escHtml(opt.label) + '</span>' + escHtml(loc(opt, 'text')) + '</label>';
       html += '</li>';
     }
     // "I don't know" option
     html += '<li class="option omit" data-value="omit" onclick="selectOption(this)">';
     html += '<input type="radio" name="answer" id="opt_omit">';
-    html += '<label for="opt_omit">I don\'t know</label>';
+    html += '<label for="opt_omit">' + escHtml(t('idk')) + '</label>';
     html += '</li>';
     elOptions.innerHTML = html;
 
