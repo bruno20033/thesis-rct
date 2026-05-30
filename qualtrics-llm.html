@@ -18,6 +18,12 @@
                                 Randomizer (counterbalancing).
     ${e://Field/ResponseID}  → Qualtrics' built-in unique participant
                                 id for this response.
+    ${e://Field/Q_Language}  → Qualtrics' built-in active survey language
+                                code (e.g. 'EN', 'DE'). Piped into the
+                                embed's `lang` param so the iframe UI and
+                                items follow the participant's chosen
+                                language. embed.html falls back to English
+                                for any code it has no translation for.
 
   phase=train tells embed.html to load the assigned set's items and
   enable tool access. cr_set determines which items are shown.
@@ -27,7 +33,7 @@
   ====================================================================
 -->
 <iframe
-  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=LLM&arm=${e://Field/arm}&phase=train&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=LLM&arm=${e://Field/arm}&phase=train&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}&lang=${e://Field/Q_Language}"
   width="100%"
   height="800"
   frameborder="0"

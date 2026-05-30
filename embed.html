@@ -446,6 +446,15 @@
   var CR_SET = (_p.get('set')   || 'A').toUpperCase();
   var IS_CR_MODE = (PHASE === 'train' || PHASE === 'posttest' || PHASE === 'delayed');
 
+  // ── Language ──
+  // Passed in from Qualtrics via &lang=${e://Field/Q_Language} so the
+  // iframe UI follows the participant's chosen survey language. Qualtrics
+  // codes look like 'EN', 'DE', 'DE-DE' — we key off the first two letters.
+  // Anything we don't have a dictionary for falls back to 'EN'.
+  var LANG = ((_p.get('lang') || 'EN').slice(0, 2)).toUpperCase();
+  if (LANG !== 'DE') LANG = 'EN';
+  try { document.documentElement.lang = LANG.toLowerCase(); } catch (_) {}
+
   // ── CR item definitions ──
   // Each item: { id, type:'cr', subtype, difficulty, stem, prompt, options:[{key,text}], correct }
   var CR_ITEMS = {
@@ -476,6 +485,250 @@
       { id:'W-M1', type:'cr', subtype:'weaken', difficulty:'medium', stem:'Ardane\'s transportation commission plans to install speed humps in residential neighborhoods to reduce traffic speed and enhance safety, based on their success in nearby towns.', prompt:'Which of the following, if true, identifies a potentially serious drawback to the plan?', options:[{key:'A',text:'On residential streets without speed humps, many vehicles travel at speeds more than 25 percent above the posted speed limit.'},{key:'B',text:'Because of their high weight, emergency vehicles such as fire trucks and ambulances must slow almost to a stop at speed humps.'},{key:'C',text:'The residential speed limit in Ardane is higher than that of the nearby towns where speed humps were installed.'},{key:'D',text:'Motorists who are not familiar with the streets in Ardane\'s residential districts would be likely to encounter the speed humps unawares unless warned by signs and painted indicators.'},{key:'E',text:'Bicyclists generally prefer that speed humps be constructed so as to leave a space on the side of the road where bicycles can travel without going over the humps.'}], correct:'B' }
     ]
   };
+
+  /* ==================================================================
+   * GERMAN translation overlay for the CR items.
+   * Keyed by item id; English CR_ITEMS above stays the source of truth
+   * for structure/answers. When LANG === 'DE', renderCRStem / option
+   * rendering pull stem, prompt, and option text from here via locCR /
+   * locOpt. Any id/field missing here falls back to the English text.
+   * NOTE: pilot translation — not a back-translated / validated instrument.
+   * ================================================================== */
+  var CR_ITEMS_DE = {
+    'A-E1': {
+      stem: 'Da kein Mitarbeiter in den Augen eines Vorgesetzten mit schlechten Nachrichten in Verbindung gebracht werden möchte, werden Informationen über ernste Probleme auf den unteren Ebenen auf jeder Stufe der Führungshierarchie zunehmend abgeschwächt und verzerrt, je weiter sie nach oben gelangen. Die Geschäftsführung ist daher über Probleme auf den unteren Ebenen schlechter informiert als ihre dort tätigen untergeordneten Mitarbeiter.',
+      prompt: 'Die oben gezogene Schlussfolgerung beruht auf der Annahme, dass',
+      options: {
+        A: 'Probleme sollten auf den Ebenen der Führungshierarchie gelöst werden, auf denen sie auftreten.',
+        B: 'Mitarbeiter sollten dafür belohnt werden, dass sie Probleme korrekt an ihre Vorgesetzten melden.',
+        C: 'Die Fähigkeit, Probleme zu lösen, ist auf höheren Ebenen wichtiger als auf den unteren Ebenen der Führungshierarchie.',
+        D: 'Geschäftsführer erhalten Informationen über Probleme auf den unteren Ebenen aus keiner anderen Quelle als von ihren untergeordneten Mitarbeitern.',
+        E: 'Manche Mitarbeiter legen mehr Wert auf die Wahrheit als darauf, wie sie von ihren Vorgesetzten wahrgenommen werden.'
+      }
+    },
+    'A-E3': {
+      stem: 'Obwohl Computer die Kommunikationsfähigkeit von Menschen verbessern können, sind Computerspiele eine Ursache für unterentwickelte Kommunikationsfähigkeiten bei Kindern. Stunden nach der Schule, die mit Computerspielen verbracht werden, sind Stunden, in denen nicht mit Menschen gesprochen wird. Daher haben Kinder, die ihre gesamte Freizeit mit diesen Spielen verbringen, weniger Erfahrung in zwischenmenschlicher Kommunikation als andere Kinder.',
+      prompt: 'Auf welcher der folgenden Annahmen beruht das Argument?',
+      options: {
+        A: 'Passive Tätigkeiten wie Fernsehen und Musikhören behindern die Entwicklung der Kommunikationsfähigkeiten bei Kindern nicht.',
+        B: 'Die meisten Kinder haben neben den Stunden nach der Schule weitere Gelegenheiten, bei denen sie wählen können, ob sie Computerspiele spielen oder mit anderen Menschen interagieren.',
+        C: 'Kinder, die nicht ihre gesamten Stunden nach der Schule mit Computerspielen verbringen, verbringen zumindest einen Teil dieser Zeit damit, mit anderen Menschen zu sprechen.',
+        D: 'Formaler Unterricht trägt wenig oder nichts zum Erwerb der Kommunikationsfähigkeiten von Kindern bei.',
+        E: 'Die geistigen Fähigkeiten, die durch das Spielen von Computerspielen entwickelt werden, tragen nicht wesentlich zur intellektuellen Entwicklung von Kindern bei.'
+      }
+    },
+    'A-M1': {
+      stem: 'Ein neu entdecktes Gemälde scheint das Werk eines von zwei Künstlern des 17. Jahrhunderts zu sein – entweder des norddeutschen Johannes Drechen oder des Franzosen Louis Birelle, der manchmal im selben Stil wie Drechen malte. Die Analyse des geschnitzten Bilderrahmens, der als der originale Rahmen des Gemäldes aus dem 17. Jahrhundert identifiziert wurde, ergab, dass er aus einem Holz besteht, das zu jener Zeit in Norddeutschland weit verbreitet, in dem Teil Frankreichs, in dem Birelle lebte, jedoch selten war. Dies zeigt, dass das Gemälde höchstwahrscheinlich das Werk von Drechen ist.',
+      prompt: 'Welche der folgenden Annahmen setzt das Argument voraus?',
+      options: {
+        A: 'Der Rahmen wurde aus Holz hergestellt, das aus der Region stammte, in der das Bild gemalt wurde.',
+        B: 'Drechen hat die Heimatregion von Birelle in Frankreich wahrscheinlich nie besucht.',
+        C: 'Manchmal ähnelt ein Gemälde anderen seiner Epoche so sehr, dass kein Experte zuverlässig entscheiden kann, wer es gemalt hat.',
+        D: 'Der Maler des Bildes wählte den Rahmen für das Bild aus.',
+        E: 'Der Schnitzstil des Bilderrahmens ist für keine bestimmte Region Europas typisch.'
+      }
+    },
+    'A-M3': {
+      stem: 'Eine berühmte Sängerin gewann kürzlich einen Prozess gegen eine Werbeagentur, weil diese in einem Werbespot eine andere Sängerin einsetzte, um die Interpretation eines bestimmten Liedes durch die berühmte Sängerin hervorzurufen. Infolge des Prozesses werden Werbeagenturen aufhören, in ihren Werbespots Imitatoren einzusetzen. Daher werden die Werbekosten steigen, da die Dienste berühmter Sänger mehr kosten als die Dienste von Imitatoren.',
+      prompt: 'Auf welcher der folgenden Annahmen beruht die obige Schlussfolgerung?',
+      options: {
+        A: 'Die meisten Menschen können die Interpretation eines Liedes durch einen berühmten Sänger nicht von der Interpretation durch einen guten Imitator unterscheiden.',
+        B: 'Werbespots mit berühmten Sängern sind in der Regel wirksamer als Werbespots mit Imitatoren berühmter Sänger.',
+        C: 'Die Originalversionen einiger bekannter Lieder stehen für die Verwendung in Werbespots nicht zur Verfügung.',
+        D: 'Werbeagenturen werden weiterhin Imitatoren einsetzen, um die körperlichen Eigenheiten berühmter Sänger nachzuahmen.',
+        E: 'Die Werbebranche wird weiterhin Lieder in Werbespots verwenden.'
+      }
+    },
+    'A-H1': {
+      stem: 'Ein neu entdecktes Gemälde Michelangelos auf einer Holztafel muss nach 1507, aber vor 1509 fertiggestellt worden sein. Es kann nicht vor 1507 gemalt worden sein, weil eine seiner zentralen Figuren eine Münze trägt, die erst in jenem Jahr geprägt wurde. Es kann nicht nach 1509 gemalt worden sein, weil es ein Pigment enthält, von dem bekannt ist, dass Michelangelo es aufgab, als in jenem Jahr eine günstigere Alternative verfügbar wurde.',
+      prompt: 'Welche der folgenden Annahmen ist eine Annahme, von der das Argument abhängt?',
+      options: {
+        A: 'Nach 1509 existierten keine Bestände des aufgegebenen Pigments mehr.',
+        B: 'Michelangelo arbeitete nicht über mehrere Jahre hinweg an dem Gemälde.',
+        C: 'Die im Gemälde dargestellte Münze war der breiten Öffentlichkeit 1507 bekannt.',
+        D: 'Die Holztafel, auf der das Gemälde ausgeführt wurde, kann nicht genau auf ihr Alter datiert werden.',
+        E: 'Michelangelos Malstil änderte sich zwischen 1507 und 1509 nicht.'
+      }
+    },
+    'A-H2': {
+      stem: 'Roland: Die alarmierende Tatsache ist, dass 90 Prozent der Menschen in diesem Land angeben, jemanden zu kennen, der arbeitslos ist.\n\nSharon: Alarmierend ist, dass du das alarmierend findest. Bei einer Arbeitslosenquote von 5 Prozent ist 1 von 20 Erwerbstätigen arbeitslos. Wenn also jede Person in diesem Land etwa 50 Erwerbstätige kennt, ist zu erwarten, dass jede Person jemanden kennt, der arbeitslos ist.',
+      prompt: 'Sharons Argument beruht auf der Annahme, dass',
+      options: {
+        A: 'Normale Arbeitslosigkeitsniveaus werden nur selten überschritten.',
+        B: 'Arbeitslosigkeit ist normalerweise nicht in geografisch isolierten Bevölkerungsgruppen konzentriert.',
+        C: 'Die Zahl der Menschen, die jeweils jemanden Arbeitslosen kennen, liegt stets über 90 Prozent der Bevölkerung.',
+        D: 'Roland verzerrt die von ihm präsentierten Statistiken nicht bewusst.',
+        E: 'Das Wissen, dass eine persönliche Bekanntschaft arbeitslos ist, erzeugt mehr Angst vor dem eigenen Arbeitsplatzverlust als das Wissen über Arbeitslosenstatistiken.'
+      }
+    },
+    'A-VH1': {
+      stem: 'In einem Experiment durfte jede Versuchsperson zwischen einer leichten und einer schwierigen Aufgabe wählen, wobei ihr gesagt wurde, dass eine andere Versuchsperson die jeweils andere Aufgabe übernehmen würde. Jede Versuchsperson konnte sich auch dafür entscheiden, die beiden Aufgaben von einem Computer zufällig zuweisen zu lassen. Die meisten Versuchspersonen wählten die leichte Aufgabe für sich selbst und gaben auf Nachfrage später an, fair gehandelt zu haben. Als das Szenario jedoch einer anderen Gruppe von Versuchspersonen geschildert wurde, sagten fast alle, die Wahl der leichten Aufgabe sei unfair. Dies zeigt, dass die meisten Menschen an sich selbst geringere moralische Maßstäbe anlegen als an andere.',
+      prompt: 'Welche der folgenden Annahmen ist für dieses Argument erforderlich?',
+      options: {
+        A: 'Zumindest einige Versuchspersonen, die angaben, mit der Wahl der leichten Aufgabe fair gehandelt zu haben, hätten gesagt, dass es unfair sei, wenn jemand anderes dies täte.',
+        B: 'Die moralischste Wahl für die Versuchspersonen wäre gewesen, die beiden Aufgaben vom Computer zufällig zuweisen zu lassen.',
+        C: 'Es gab zumindest einige Versuchspersonen, die der schwierigen Aufgabe zugewiesen wurden und die Zuweisung als unfair empfanden.',
+        D: 'Im Durchschnitt waren die Versuchspersonen, denen das Szenario geschildert wurde, in ihren moralischen Urteilen genauer als die übrigen Versuchspersonen.',
+        E: 'Zumindest einige Versuchspersonen, die die Wahl hatten, die Aufgaben selbst zuzuweisen oder den Computer zuweisen zu lassen, hatten das Gefühl, die einzige ihnen zur Verfügung stehende faire Wahl getroffen zu haben.'
+      }
+    },
+    'A-VH2': {
+      stem: 'Ein aktueller Bericht stellte fest, dass zwar nur 3 Prozent der Autofahrer auf den Highways von Maryland ihre Fahrzeuge mit Radarwarngeräten ausstatteten, aber 33 Prozent aller Fahrzeuge, die wegen Überschreitung der Geschwindigkeitsbegrenzung verwarnt wurden, damit ausgestattet waren. Offensichtlich überschreiten Fahrer, die ihre Fahrzeuge mit Radarwarngeräten ausstatten, eher regelmäßig die Geschwindigkeitsbegrenzung als Fahrer, die dies nicht tun.',
+      prompt: 'Von welcher der folgenden Annahmen hängt die oben gezogene Schlussfolgerung ab?',
+      options: {
+        A: 'Fahrer, die ihre Fahrzeuge mit Radarwarngeräten ausstatten, werden seltener wegen Überschreitung der Geschwindigkeitsbegrenzung verwarnt als Fahrer, die dies nicht tun.',
+        B: 'Fahrer, die wegen Überschreitung der Geschwindigkeitsbegrenzung verwarnt werden, überschreiten die Geschwindigkeitsbegrenzung eher regelmäßig als Fahrer, die nicht verwarnt werden.',
+        C: 'Die Zahl der wegen Überschreitung der Geschwindigkeitsbegrenzung verwarnten Fahrzeuge überstieg die Zahl der mit Radarwarngeräten ausgestatteten Fahrzeuge.',
+        D: 'Viele der Fahrzeuge, die wegen Überschreitung der Geschwindigkeitsbegrenzung verwarnt wurden, wurden im Berichtszeitraum mehr als einmal verwarnt.',
+        E: 'Fahrer auf den Highways von Maryland statteten ihre Fahrzeuge häufiger mit Radarwarngeräten aus, als Fahrer in anderen Bundesstaaten die Geschwindigkeitsbegrenzung überschritten.'
+      }
+    },
+    'A-E2': {
+      stem: 'Gemäß den neuen Rauchervorschriften im Büro dürfen nur Mitarbeiter, die über ein geschlossenes Büro verfügen, an ihrem Schreibtisch rauchen. Praktisch alle Mitarbeiter mit geschlossenen Büros befinden sich auf der Fachkräfteebene, und praktisch allen Mitarbeitern im Sekretariat fehlt ein geschlossenes Büro. Daher sollten rauchenden Sekretariatskräften geschlossene Büros angeboten werden.',
+      prompt: 'Welche der folgenden Annahmen ermöglicht es, die obige Schlussfolgerung korrekt zu ziehen?',
+      options: {
+        A: 'Mitarbeiter auf der Fachkräfteebene, die nicht rauchen, sollten ihre geschlossenen Büros behalten.',
+        B: 'Mitarbeiter mit geschlossenen Büros sollten an ihrem Schreibtisch nicht rauchen, auch wenn die neuen Vorschriften es ihnen erlauben.',
+        C: 'Mitarbeitern auf der Sekretariatsebene sollte das Rauchen an ihrem Schreibtisch erlaubt sein, selbst wenn sie kein geschlossenes Büro haben.',
+        D: 'Die Rauchervorschriften sollten allen rauchenden Mitarbeitern unabhängig von ihrer beruflichen Position die gleiche Möglichkeit zum Rauchen bieten.',
+        E: 'Die Rauchervorschriften sollten allen nicht rauchenden Mitarbeitern den gleichen Schutz vor etwaigen mit dem Rauchen verbundenen Gefahren bieten.'
+      }
+    },
+    'A-E4': {
+      stem: 'Obwohl es keine Aufzeichnungen über die Abstammung des Dichters Edmund Spenser gibt, wissen wir, dass Spenser in seiner Jugend zwischen 1560 und 1570 für eine Zeit die Merchant Taylors\' School in London besuchte. Aufzeichnungen aus dieser Zeit weisen darauf hin, dass die Merchant Taylors\'-Gilde damals nur drei Mitglieder namens Spenser hatte: Robert Spenser, geführt als Gentleman; Nicholas Spenser, 1568 zum Vorsteher (Warden) der Gilde gewählt; und John Spenser, geführt als „Geselle der Tuchmacherei". Von diesen war der letzte wahrscheinlich der am wenigsten wohlhabende der drei – und höchstwahrscheinlich Edmunds Vater, da die Rechnungsunterlagen der Schule Edmund als einen Schüler führen, der die Schule zu einer ermäßigten Gebühr besuchte.',
+      prompt: 'Welche der folgenden Annahmen ist eine Annahme, von der das Argument abhängt?',
+      options: {
+        A: 'Jeder, der im London des 16. Jahrhunderts beruflich Kleidung herstellte, hätte Mitglied der Merchant Taylors\'-Gilde sein müssen.',
+        B: 'Die Tatsache, dass Edmund Spenser die Merchant Taylors\' School besuchte, bedeutete nicht zwangsläufig, dass er beabsichtigte, Schneider zu werden.',
+        C: 'Kein Mitglied der Gilde konnte im London des 16. Jahrhunderts Vorsteher der Gilde werden, es sei denn, es war ein Gentleman.',
+        D: 'Die meisten derjenigen, deren Väter Mitglieder der Merchant Taylors\'-Gilde waren, waren Schüler der Merchant Taylors\' School.',
+        E: 'Die Merchant Taylors\' School senkte ihre Gebühren für die Kinder der wohlhabenderen Gildenmitglieder nicht.'
+      }
+    },
+    'A-M2': {
+      stem: 'Ein Forscher stellte fest, dass Menschen mit geringer Aktivität des Immunsystems bei Tests der psychischen Gesundheit tendenziell deutlich schlechter abschneiden als Menschen mit normaler oder hoher Aktivität des Immunsystems. Aus diesem Experiment schloss der Forscher, dass das Immunsystem sowohl vor psychischen Erkrankungen als auch vor körperlichen Krankheiten schützt.',
+      prompt: 'Von welcher der folgenden Annahmen hängt die Schlussfolgerung des Forschers ab?',
+      options: {
+        A: 'Eine hohe Aktivität des Immunsystems schützt besser vor psychischen Erkrankungen als eine normale Aktivität des Immunsystems.',
+        B: 'Psychische Erkrankungen ähneln in ihren Auswirkungen auf die Körpersysteme körperlichen Krankheiten.',
+        C: 'Menschen mit hoher Aktivität des Immunsystems können keine psychische Erkrankung entwickeln.',
+        D: 'Psychische Erkrankungen führen nicht dazu, dass die Aktivität des Immunsystems von Menschen abnimmt.',
+        E: 'Die psychologische Behandlung psychischer Erkrankungen ist nicht so wirksam wie die medizinische Behandlung.'
+      }
+    },
+    'A-M4': {
+      stem: 'Bankkunden in den Vereinigten Staaten sind alle finanziell gegen Bankenpleiten abgesichert, weil der Staat alle Bankeinlagen von Privatpersonen versichert. Ein Ökonom argumentiert, dass diese Versicherung mitverantwortlich für die hohe Rate an Bankenpleiten ist, da sie den Einlegern jeglichen finanziellen Anreiz nimmt, herauszufinden, ob die Bank, die ihr Geld verwahrt, vor einer Pleite sicher ist. Wären die Einleger wählerischer, müssten die Banken sicher sein, um im Wettbewerb um das Geld der Einleger bestehen zu können.',
+      prompt: 'Welche der folgenden Annahmen trifft das Argument des Ökonomen?',
+      options: {
+        A: 'Bankenpleiten werden dadurch verursacht, dass große Kreditnehmer ihre Kreditrückzahlungen nicht leisten.',
+        B: 'Ein erheblicher Teil der Einleger unterhält Konten bei mehreren verschiedenen Banken.',
+        C: 'Je mehr ein Einleger anzulegen hat, desto sorgfältiger wählt er oder sie tendenziell eine Bank aus.',
+        D: 'Der Unterschied bei den an Einleger gezahlten Zinssätzen verschiedener Banken ist kein wesentlicher Faktor bei Bankenpleiten.',
+        E: 'Potenzielle Einleger sind in der Lage festzustellen, welche Banken vor einer Pleite sicher sind.'
+      }
+    },
+    'A-H3': {
+      stem: 'Die Ausgaben US-amerikanischer Unternehmen für Forschung und Entwicklung stiegen 1984 gegenüber 1983 um 8 Prozent und setzten damit einen Abwärtstrend seit 1981 fort, als sie gegenüber 1980 um 16,4 Prozent zunahmen. Der Autor schließt daraus, dass die 1981 vom Kongress beschlossene Steuergutschrift von 25 Prozent, die die Ausgaben für Forschung und Entwicklung fördern sollte, wenig oder nichts bewirkte, um diese Ausgaben anzuregen.',
+      prompt: 'Die Schlussfolgerung des obigen Arguments kann nur dann wahr sein, wenn welche der folgenden Aussagen wahr ist?',
+      options: {
+        A: 'Die Ausgaben von Unternehmen für F&E sind normalerweise direkt proportional zu den Unternehmensgewinnen.',
+        B: 'Die Ausgaben von Unternehmen für F&E konnten 1985 nicht um mehr als 8,3 Prozent steigen.',
+        C: 'Wäre die Steuergutschrift von 1981 höher als 25 Prozent angesetzt worden, wären die F&E-Ausgaben der Unternehmen nach 1981 stärker gestiegen, als sie es taten.',
+        D: 'Ohne die Steuergutschrift von 25 Prozent wären die F&E-Ausgaben der Unternehmen nach 1981 nicht wesentlich niedriger gewesen, als sie es waren.',
+        E: 'Steuergutschriften für bestimmte Investitionen sind nur selten wirksam, um Unternehmen zu diesen Investitionen zu bewegen.'
+      }
+    },
+    'A-H4': {
+      stem: 'Ein Kognitionswissenschaftler erörtert Studien zur Selbsterkennung im Spiegel (mirror self-recognition, MSR), die auf der Arbeit von Gallup beruhen. Die meisten Tiere zeigen vor Spiegeln nur soziale Verhaltensweisen wie Aggression. Menschenaffen hingegen zeigen nach wiederholter Konfrontation selbstgerichtete Verhaltensweisen, was darauf hindeutet, dass sie ihr Spiegelbild erkennen. Die Schlussfolgerung besagt, dass Menschenaffen unter den nichtmenschlichen Arten eine einzigartige Fähigkeit zur Selbstwahrnehmung besitzen.',
+      prompt: 'Welche der folgenden Annahmen trifft der Kognitionswissenschaftler im obigen Argument?',
+      options: {
+        A: 'Gallups Arbeit hat nachgewiesen, dass Menschenaffen eine unter den nichtmenschlichen Arten einzigartige MSR-Fähigkeit besitzen.',
+        B: 'Wenn einem Tier die MSR-Fähigkeit fehlt, fehlt ihm die Fähigkeit zur Selbstwahrnehmung.',
+        C: 'Wenn Tiere gegenüber Spiegeln soziales Verhalten zeigen, können sie nicht selbstwahrnehmend sein.',
+        D: 'Alle Tiere, die Spiegeln ausgesetzt werden, zeigen entweder soziales oder selbstgerichtetes Verhalten.',
+        E: 'Tiere ohne MSR könnten Selbstwahrnehmung auf andere Weise nachweisen.'
+      }
+    },
+    'A-VH3': {
+      stem: 'Die Netzwerke von Blutgefäßen in den Flügeln von Fledermäusen dienen ausschließlich dazu, die beim Flug erzeugte Wärme abzuleiten. Diese Wärme entsteht nur, weil Fledermäuse mit den Flügeln schlagen. Die jüngste Entdeckung von Paläontologen, dass der geflügelte Dinosaurier Sandactylus ähnliche Netzwerke von Blutgefäßen in der Haut seiner Flügel besaß, liefert somit einen Beleg für die Hypothese, dass Sandactylus durch Flügelschlagen flog und nicht nur durch Gleiten.',
+      prompt: 'Auf welcher der folgenden Annahmen beruht das Argument im Text?',
+      options: {
+        A: 'Sandactylus hätte keine Netzwerke von Blutgefäßen in der Haut seiner Flügel gehabt, wenn diese Netzwerke für Sandactylus nutzlos gewesen wären.',
+        B: 'Alle Lebewesen, die durch Flügelschlagen fliegen, besitzen Netzwerke von Blutgefäßen in der Haut ihrer Flügel.',
+        C: 'Geflügelte Dinosaurier, die beim Flug mit den Flügeln schlugen, hätten wirksamer fliegen können als geflügelte Dinosaurier, die nur gleiten konnten.',
+        D: 'Wenn Sandactylus durch Flügelschlagen flog, dann könnten Paläontologen mit Sicherheit einen Beleg dafür finden, dass er dies tat.',
+        E: 'Die von Sandactylus durch das Schlagen seiner Flügel im Flug erzeugte Wärme hätte durch nichts anderes als die Blutgefäße in seinen Flügeln abgeleitet werden können.'
+      }
+    },
+    'A-VH4': {
+      stem: '[Platzhalter-Item — Text wird vor dem Einsatz ergänzt]',
+      prompt: 'Welche der folgenden Annahmen ist eine Annahme, von der das Argument abhängt?',
+      options: {
+        A: 'Platzhalter-Option A', B: 'Platzhalter-Option B', C: 'Platzhalter-Option C',
+        D: 'Platzhalter-Option D', E: 'Platzhalter-Option E'
+      }
+    },
+    'F-E1': {
+      stem: 'Hauseigentümer im Alter von 40 bis 50 Jahren kaufen mit höherer Wahrscheinlichkeit Eiscreme und kaufen sie zudem mit höherer Wahrscheinlichkeit in größeren Mengen als Angehörige jeder anderen demografischen Gruppe. Die weit verbreitete Annahme, dass Jugendliche mehr Eiscreme essen als Erwachsene, muss daher falsch sein.',
+      prompt: 'Das Argument ist vor allem deshalb fehlerhaft, weil der Autor',
+      options: {
+        A: 'nicht zwischen Kaufen und Verzehren unterscheidet.',
+        B: 'keine Informationen über Hauseigentümer in anderen Altersgruppen als 40 bis 50 liefert.',
+        C: 'sich auf eine weit verbreitete Annahme statt auf dokumentierte Forschungsergebnisse stützt.',
+        D: 'die genaue Menge an Eiscreme, die von einer demografischen Gruppe gekauft wird, nicht angibt.',
+        E: 'Eiscreme erörtert statt nahrhafterer und gesünderer Lebensmittel.'
+      }
+    },
+    'F-E2': {
+      stem: 'Ein Verbraucherschützer im Gesundheitsbereich wirft einem Süßwarenunternehmen vor, seinen Produkten Koffein zuzusetzen, um sie suchterzeugend zu machen. Der Hersteller entgegnet, dass seine Schokoriegel weniger Koffein enthalten als die unverarbeiteten Kakaobohnen, aus denen Schokolade hergestellt wird.',
+      prompt: 'Die Entgegnung des Herstellers ist als Widerlegung des Arguments des Verbraucherschützers fehlerhaft, weil sie',
+      options: {
+        A: 'nicht auf die Frage eingeht, ob der Koffeingehalt in den vom Hersteller verkauften Schokoriegeln ausreicht, um Menschen süchtig zu halten.',
+        B: 'ohne Begründung annimmt, dass alle unverarbeiteten Kakaobohnen eine einheitliche Menge Koffein enthalten.',
+        C: 'nicht genau angibt, wie Koffein im Herstellungsprozess verloren geht.',
+        D: 'das Argument des Verbraucherschützers so behandelt, als ginge es um jeden einzelnen Schokoriegel und nicht um die Süßwaren des Herstellers im Allgemeinen.',
+        E: 'lediglich der Schlussfolgerung des Verbraucherschützers widerspricht, ohne einen Grund zu der Annahme zu liefern, dass dessen Argumentation unzutreffend ist.'
+      }
+    },
+    'W-E1': {
+      stem: 'Im trockenen Land entlang des Colorado River ist die Nutzung des Flusswassers streng geregelt: Jede Farm entlang des Flusses verfügt über eine begrenzte Zuteilung, die sie zur Bewässerung nutzen darf. Aber auch die Bäume, die in schmalen Streifen entlang der Flussufer wachsen, verbrauchen sein Wasser. Wenn die Bauern diese Bäume also entfernen würden, stünde offensichtlich mehr Wasser für die Bewässerung der Feldfrüchte zur Verfügung.',
+      prompt: 'Welche der folgenden Aussagen würde, falls sie zutrifft, das Argument am stärksten schwächen?',
+      options: {
+        A: 'Die Bäume entlang der Flussufer schützen ihn vor Sonne und Wind und verringern dadurch erheblich die durch Verdunstung verlorene Wassermenge.',
+        B: 'Die Eigentümer der Farmen entlang des Flusses werden die Kosten für das Fällen der Bäume an den Ufern wahrscheinlich nicht auf sich nehmen, sofern ihnen dafür nicht eine größere Wasserzuteilung gewährt wird.',
+        C: 'Viele der derzeit an den Flussufern vorkommenden Baumarten sind speziell an das Wachstum an Orten angepasst, an denen die Baumwurzeln ständig nass bleiben.',
+        D: 'Der Landstreifen, auf dem die Bäume entlang der Flussufer wachsen, wäre für den Anbau von Feldfrüchten nicht geeignet, wenn die Bäume entfernt würden.',
+        E: 'Die Verteilung der Wasserzuteilungen für die Bewässerung soll verhindern, dass weiter flussaufwärts gelegene Farmen Wasser verbrauchen, das von weiter flussabwärts gelegenen Farmen benötigt wird.'
+      }
+    },
+    'W-M1': {
+      stem: 'Die Verkehrskommission von Ardane plant, in Wohngebieten Bodenschwellen zu installieren, um die Verkehrsgeschwindigkeit zu senken und die Sicherheit zu erhöhen – gestützt auf ihren Erfolg in benachbarten Städten.',
+      prompt: 'Welche der folgenden Aussagen benennt, falls sie zutrifft, einen potenziell schwerwiegenden Nachteil des Plans?',
+      options: {
+        A: 'Auf Wohnstraßen ohne Bodenschwellen fahren viele Fahrzeuge mit Geschwindigkeiten von mehr als 25 Prozent über der zulässigen Höchstgeschwindigkeit.',
+        B: 'Aufgrund ihres hohen Gewichts müssen Einsatzfahrzeuge wie Feuerwehrautos und Krankenwagen an Bodenschwellen fast bis zum Stillstand abbremsen.',
+        C: 'Die zulässige Höchstgeschwindigkeit in Wohngebieten ist in Ardane höher als in den benachbarten Städten, in denen Bodenschwellen installiert wurden.',
+        D: 'Autofahrer, die mit den Straßen in Ardanes Wohngebieten nicht vertraut sind, würden die Bodenschwellen wahrscheinlich unvermittelt antreffen, sofern sie nicht durch Schilder und Bodenmarkierungen gewarnt werden.',
+        E: 'Radfahrer bevorzugen es im Allgemeinen, dass Bodenschwellen so gebaut werden, dass am Straßenrand ein Bereich frei bleibt, in dem Fahrräder fahren können, ohne über die Schwellen zu fahren.'
+      }
+    }
+  };
+
+  // Pull localized stem/prompt for a CR item, falling back to English.
+  function locCR(item, field) {
+    if (LANG === 'DE' && item && CR_ITEMS_DE[item.id] && CR_ITEMS_DE[item.id][field] != null) {
+      return CR_ITEMS_DE[item.id][field];
+    }
+    return item[field];
+  }
+  // Pull localized option text for a CR item option, falling back to English.
+  function locOpt(item, opt) {
+    if (LANG === 'DE' && item && CR_ITEMS_DE[item.id] && CR_ITEMS_DE[item.id].options) {
+      var o = CR_ITEMS_DE[item.id].options[opt.key];
+      if (o != null) return o;
+    }
+    return opt.text;
+  }
 
   // ── Shuffle utility (Fisher-Yates) ──
   function shuffleArray(arr) {
@@ -556,6 +809,132 @@
     return m ? decodeURIComponent(m[1].replace(/\+/g, ' ')) : null;
   }
 
+  /* ==================================================================
+   * UI string table (chrome only — CR item text lives in CR_ITEMS_DE).
+   * t('key') returns the LANG string, falling back to EN, then the key.
+   * tf('key', {n:1}) does the same with {placeholder} substitution.
+   * ================================================================== */
+  var I18N = {
+    EN: {
+      fatal_title: 'Missing condition parameter',
+      fatal_body: 'This embed must be loaded with a <code>condition</code> query parameter: <code>LLM</code>, <code>SEARCH</code>, or <code>NOAID</code>.',
+      fatal_example: 'Example: <code>embed.html?condition=LLM&amp;pid=test123</code>',
+      instructions_title: 'Instructions',
+      instr_noaid_cr: 'For each question below, read the argument passage carefully and select the best answer from the five options (A–E). No external tools are available for this section. Take your time and reason through each argument before answering.',
+      instr_search_cr: 'For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>search panel</strong> on the right to look up information that helps you reason through the argument. Take your time.',
+      instr_llm_cr: 'For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>assistant</strong> on the right to help you reason through the argument. Take your time.',
+      instr_noaid_chart: 'For each chart below, read the statement carefully and decide whether it is <strong>True</strong> or <strong>False</strong> based on the data shown. No external tools are available for this section.',
+      instr_chart_default: 'Sample text',
+      pane_cr: 'Logical Reasoning',
+      pane_chart: 'Company performance',
+      pane_tools: 'Research tools',
+      aria_left_cr: 'Argument and task questions',
+      aria_left_chart: 'Chart and task questions',
+      aria_right: 'Information retrieval',
+      aria_chat_log: 'Chat transcript',
+      chat_placeholder_cr: 'Ask the assistant about the argument…',
+      chat_placeholder_chart: 'Ask the assistant about the chart…',
+      send: 'Send',
+      typing: 'Assistant is typing…',
+      share_btn: 'Share chart with assistant',
+      share_btn_title: 'Send the chart image and data to the assistant as context for the next message.',
+      share_done: '✓ Chart shared',
+      share_chip: 'Chart and chart data shared with the assistant.',
+      share_attached: 'Attached — included with your next message.',
+      share_render_err: 'Could not render chart image ({msg}).',
+      search_placeholder: 'Search the web…',
+      search_btn: 'Search',
+      searching: 'Searching…',
+      search_back: '← Back to results',
+      search_back_aria: 'Back to results',
+      search_newtab: 'Open in new tab ↗',
+      result_blocked: '<strong>This site refused to be embedded.</strong> Click <strong>Open in new tab ↗</strong> above to read it in a new tab — your task on the left will stay where it is. Your time on the new tab is still recorded.',
+      search_unavailable_cr: 'Search is temporarily unavailable. Please try again, or answer based on the argument alone.',
+      search_unavailable_chart: 'Search is temporarily unavailable. Please try again, or answer based on the chart alone.',
+      no_results: 'No results for ',
+      results_count: '{n} results for ',
+      q_progress: 'Question {n} of {m}',
+      idk: 'I don\'t know',
+      tf_true: 'True',
+      tf_false: 'False',
+      btn_finish: 'Finish',
+      btn_next: 'Next question →',
+      hint_finish: 'You can change your selection until you click Finish.',
+      hint_next: 'You can change your selection until you click Next question.',
+      submitted: 'Submitted',
+      all_recorded: 'All answers recorded. Click Next to continue.',
+      answer_submitted: 'Answer submitted',
+      answer_recorded: 'Your answer has been recorded. Click Next to continue.',
+      placeholder_item: 'Placeholder item — scoring excluded',
+      chat_unreachable: 'Could not reach the assistant: ',
+      error_prefix: 'Error: '
+    },
+    DE: {
+      fatal_title: 'Fehlender Parameter „condition"',
+      fatal_body: 'Dieses Embed muss mit einem <code>condition</code>-Parameter geladen werden: <code>LLM</code>, <code>SEARCH</code> oder <code>NOAID</code>.',
+      fatal_example: 'Beispiel: <code>embed.html?condition=LLM&amp;pid=test123</code>',
+      instructions_title: 'Anweisungen',
+      instr_noaid_cr: 'Lesen Sie bei jeder Frage den Argumenttext sorgfältig und wählen Sie die beste Antwort aus den fünf Optionen (A–E). Für diesen Abschnitt stehen keine externen Hilfsmittel zur Verfügung. Nehmen Sie sich Zeit und durchdenken Sie jedes Argument, bevor Sie antworten.',
+      instr_search_cr: 'Lesen Sie bei jeder Frage den Argumenttext und wählen Sie die beste Antwort aus den fünf Optionen (A–E). Sie dürfen das <strong>Suchfeld</strong> rechts nutzen, um Informationen nachzuschlagen, die Ihnen beim Durchdenken des Arguments helfen. Nehmen Sie sich Zeit.',
+      instr_llm_cr: 'Lesen Sie bei jeder Frage den Argumenttext und wählen Sie die beste Antwort aus den fünf Optionen (A–E). Sie dürfen den <strong>Assistenten</strong> rechts nutzen, um das Argument zu durchdenken. Nehmen Sie sich Zeit.',
+      instr_noaid_chart: 'Lesen Sie bei jedem Diagramm die Aussage sorgfältig und entscheiden Sie anhand der dargestellten Daten, ob sie <strong>Wahr</strong> oder <strong>Falsch</strong> ist. Für diesen Abschnitt stehen keine externen Hilfsmittel zur Verfügung.',
+      instr_chart_default: 'Beispieltext',
+      pane_cr: 'Logisches Denken',
+      pane_chart: 'Unternehmensleistung',
+      pane_tools: 'Recherche-Werkzeuge',
+      aria_left_cr: 'Argument und Aufgabenfragen',
+      aria_left_chart: 'Diagramm und Aufgabenfragen',
+      aria_right: 'Informationsbeschaffung',
+      aria_chat_log: 'Chat-Verlauf',
+      chat_placeholder_cr: 'Fragen Sie den Assistenten zum Argument…',
+      chat_placeholder_chart: 'Fragen Sie den Assistenten zum Diagramm…',
+      send: 'Senden',
+      typing: 'Der Assistent schreibt…',
+      share_btn: 'Diagramm mit Assistent teilen',
+      share_btn_title: 'Senden Sie das Diagrammbild und die Daten als Kontext für die nächste Nachricht an den Assistenten.',
+      share_done: '✓ Diagramm geteilt',
+      share_chip: 'Diagramm und Diagrammdaten wurden mit dem Assistenten geteilt.',
+      share_attached: 'Angehängt — wird mit Ihrer nächsten Nachricht gesendet.',
+      share_render_err: 'Diagrammbild konnte nicht gerendert werden ({msg}).',
+      search_placeholder: 'Im Web suchen…',
+      search_btn: 'Suchen',
+      searching: 'Suche läuft…',
+      search_back: '← Zurück zu den Ergebnissen',
+      search_back_aria: 'Zurück zu den Ergebnissen',
+      search_newtab: 'In neuem Tab öffnen ↗',
+      result_blocked: '<strong>Diese Seite kann nicht eingebettet werden.</strong> Klicken Sie oben auf <strong>In neuem Tab öffnen ↗</strong>, um sie in einem neuen Tab zu lesen — Ihre Aufgabe links bleibt erhalten. Ihre Zeit im neuen Tab wird weiterhin erfasst.',
+      search_unavailable_cr: 'Die Suche ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut oder beantworten Sie die Frage allein anhand des Arguments.',
+      search_unavailable_chart: 'Die Suche ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut oder beantworten Sie die Frage allein anhand des Diagramms.',
+      no_results: 'Keine Ergebnisse für ',
+      results_count: '{n} Ergebnisse für ',
+      q_progress: 'Frage {n} von {m}',
+      idk: 'Ich weiß es nicht',
+      tf_true: 'Wahr',
+      tf_false: 'Falsch',
+      btn_finish: 'Fertig',
+      btn_next: 'Nächste Frage →',
+      hint_finish: 'Sie können Ihre Auswahl ändern, bis Sie auf „Fertig" klicken.',
+      hint_next: 'Sie können Ihre Auswahl ändern, bis Sie auf „Nächste Frage" klicken.',
+      submitted: 'Übermittelt',
+      all_recorded: 'Alle Antworten wurden gespeichert. Klicken Sie auf „Weiter", um fortzufahren.',
+      answer_submitted: 'Antwort übermittelt',
+      answer_recorded: 'Ihre Antwort wurde gespeichert. Klicken Sie auf „Weiter", um fortzufahren.',
+      placeholder_item: 'Platzhalter-Item — von der Bewertung ausgeschlossen',
+      chat_unreachable: 'Der Assistent ist nicht erreichbar: ',
+      error_prefix: 'Fehler: '
+    }
+  };
+  function t(key) {
+    var s = (I18N[LANG] && I18N[LANG][key]);
+    if (s == null) s = I18N.EN[key];
+    return s == null ? key : s;
+  }
+  function tf(key, map) {
+    var s = t(key);
+    if (map) { for (var k in map) { if (map.hasOwnProperty(k)) s = s.replace('{' + k + '}', map[k]); } }
+    return s;
+  }
+
   var rawCondition = (getParam('condition') || '').toUpperCase();
   var CONDITION = (rawCondition === 'LLM' || rawCondition === 'SEARCH' || rawCondition === 'NOAID') ? rawCondition : null;
   var PID       = getParam('pid')   || ('local-' + Math.random().toString(36).slice(2, 10));
@@ -587,36 +966,24 @@
   if (!CONDITION) {
     root.innerHTML =
       '<div class="rct-fatal">' +
-      '<h2>Missing condition parameter</h2>' +
-      '<p>This embed must be loaded with a <code>condition</code> query parameter: ' +
-         '<code>LLM</code>, <code>SEARCH</code>, or <code>NOAID</code>.</p>' +
-      '<p>Example: <code>embed.html?condition=LLM&amp;pid=test123</code></p>' +
+      '<h2>' + t('fatal_title') + '</h2>' +
+      '<p>' + t('fatal_body') + '</p>' +
+      '<p>' + t('fatal_example') + '</p>' +
       '</div>';
     return;
   }
 
   /* Instructions text — must be defined AFTER CONDITION is parsed above */
   var INSTRUCTIONS_HTML;
+  var _instrTitle = '<h2 class="rct-instructions-title">' + t('instructions_title') + '</h2>';
   if (IS_CR_MODE) {
-    if (CONDITION === 'NOAID') {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each question below, read the argument passage carefully and select the best answer from the five options (A–E). No external tools are available for this section. Take your time and reason through each argument before answering.</p>';
-    } else if (CONDITION === 'SEARCH') {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>search panel</strong> on the right to look up information that helps you reason through the argument. Take your time.</p>';
-    } else {
-      INSTRUCTIONS_HTML =
-        '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each question below, read the argument passage and select the best answer from the five options (A–E). You may use the <strong>assistant</strong> on the right to help you reason through the argument. Take your time.</p>';
-    }
+    var _crBodyKey = (CONDITION === 'NOAID') ? 'instr_noaid_cr'
+                   : (CONDITION === 'SEARCH') ? 'instr_search_cr'
+                   : 'instr_llm_cr';
+    INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t(_crBodyKey) + '</p>';
   } else {
-    INSTRUCTIONS_HTML = (CONDITION === 'NOAID')
-      ? '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">For each chart below, read the statement carefully and decide whether it is <strong>True</strong> or <strong>False</strong> based on the data shown. No external tools are available for this section.</p>'
-      : '<h2 class="rct-instructions-title">Instructions</h2>' +
-        '<p class="rct-instructions-body">Sample text</p>';
+    var _chartBodyKey = (CONDITION === 'NOAID') ? 'instr_noaid_chart' : 'instr_chart_default';
+    INSTRUCTIONS_HTML = _instrTitle + '<p class="rct-instructions-body">' + t(_chartBodyKey) + '</p>';
   }
 
   /* ==================================================================
@@ -841,33 +1208,33 @@
       // probe-only scaffold the Socratic prompt enforces.
       var shareToolbarHtml = (!IS_CR_MODE && ARM === 'unrestricted')
         ? '<div id="rct-share-toolbar">' +
-            '<button id="rct-share-chart-btn" type="button" class="rct-button rct-button-secondary" title="Send the chart image and data to the assistant as context for the next message.">' +
-              '<span aria-hidden="true" style="margin-right:6px">📊</span>Share chart with assistant' +
+            '<button id="rct-share-chart-btn" type="button" class="rct-button rct-button-secondary" title="' + esc(t('share_btn_title')) + '">' +
+              '<span aria-hidden="true" style="margin-right:6px">📊</span>' + esc(t('share_btn')) +
             '</button>' +
             '<span id="rct-share-chart-status" aria-live="polite"></span>' +
           '</div>'
         : '';
       var chatPlaceholder = IS_CR_MODE
-        ? 'Ask the assistant about the argument…'
-        : 'Ask the assistant about the chart…';
+        ? t('chat_placeholder_cr')
+        : t('chat_placeholder_chart');
       rightHtml =
         '<div id="right-panel-llm">' +
-          '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="Chat transcript"></div>' +
-          '<div id="rct-chat-typing" style="display:none">Assistant is typing…</div>' +
+          '<div id="rct-chat-log" role="log" aria-live="polite" aria-label="' + esc(t('aria_chat_log')) + '"></div>' +
+          '<div id="rct-chat-typing" style="display:none">' + esc(t('typing')) + '</div>' +
           shareToolbarHtml +
           '<form id="rct-chat-form" autocomplete="off">' +
             '<input id="rct-chat-input" type="text" placeholder="' + esc(chatPlaceholder) + '" maxlength="1000" />' +
-            '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">Send</button>' +
+            '<button id="rct-chat-send" type="submit" class="rct-button rct-button-primary">' + esc(t('send')) + '</button>' +
           '</form>' +
         '</div>';
     } else {
       rightHtml =
         '<div id="right-panel-search">' +
           '<form id="rct-search-form" autocomplete="off" role="search">' +
-            '<input id="rct-search-input" type="text" placeholder="Search the web…" maxlength="200" />' +
-            '<button id="rct-search-button" type="submit" class="rct-button rct-button-primary">Search</button>' +
+            '<input id="rct-search-input" type="text" placeholder="' + esc(t('search_placeholder')) + '" maxlength="200" />' +
+            '<button id="rct-search-button" type="submit" class="rct-button rct-button-primary">' + esc(t('search_btn')) + '</button>' +
           '</form>' +
-          '<div id="rct-search-spinner" style="display:none">Searching…</div>' +
+          '<div id="rct-search-spinner" style="display:none">' + esc(t('searching')) + '</div>' +
           '<div id="rct-search-results" aria-live="polite"></div>' +
           // In-panel result viewer (hidden until a click). Loads the
           // destination URL inside the right pane so the chart +
@@ -875,19 +1242,17 @@
           // iframing trigger the .is-blocked fallback.
           '<div id="rct-result-frame-container" aria-live="polite">' +
             '<div class="rct-result-frame-bar">' +
-              '<button id="rct-result-frame-back" type="button" aria-label="Back to results">← Back to results</button>' +
+              '<button id="rct-result-frame-back" type="button" aria-label="' + esc(t('search_back_aria')) + '">' + esc(t('search_back')) + '</button>' +
               '<span id="rct-result-frame-url" title=""></span>' +
-              '<a id="rct-result-frame-newtab" href="#" target="_blank" rel="noopener noreferrer">Open in new tab ↗</a>' +
+              '<a id="rct-result-frame-newtab" href="#" target="_blank" rel="noopener noreferrer">' + esc(t('search_newtab')) + '</a>' +
             '</div>' +
             '<iframe id="rct-result-frame" src="about:blank" referrerpolicy="no-referrer" loading="lazy" sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>' +
-            '<div id="rct-result-frame-blocked">' +
-              '<strong>This site refused to be embedded.</strong> Click <strong>Open in new tab ↗</strong> above to read it in a new tab — your task and chart on the left will stay where they are. Your time on the new tab is still recorded.' +
-            '</div>' +
+            '<div id="rct-result-frame-blocked">' + t('result_blocked') + '</div>' +
           '</div>' +
         '</div>';
     }
-    var leftPaneHeader = IS_CR_MODE ? 'Logical Reasoning' : 'Company performance';
-    var leftPaneLabel = IS_CR_MODE ? 'Argument and task questions' : 'Chart and task questions';
+    var leftPaneHeader = IS_CR_MODE ? t('pane_cr') : t('pane_chart');
+    var leftPaneLabel = IS_CR_MODE ? t('aria_left_cr') : t('aria_left_chart');
     root.innerHTML =
       '<header class="rct-instructions">' + INSTRUCTIONS_HTML + '</header>' +
       '<div class="rct-panes">' +
@@ -897,8 +1262,8 @@
           '<div class="rct-chart-area" id="chart-root"></div>' +
           '<div class="rct-question-block" id="question-area"></div>' +
         '</section>' +
-        '<section class="rct-pane rct-right" aria-label="Information retrieval">' +
-          '<div class="rct-pane-header">Research tools</div>' +
+        '<section class="rct-pane rct-right" aria-label="' + esc(t('aria_right')) + '">' +
+          '<div class="rct-pane-header">' + esc(t('pane_tools')) + '</div>' +
           rightHtml +
         '</section>' +
       '</div>';
@@ -1000,10 +1365,10 @@
     if (!q || q.type !== 'cr') { stemHolder.innerHTML = ''; return; }
     var html = '';
     if (q.placeholder) {
-      html += '<p class="cr-item-meta">Placeholder item — scoring excluded</p>';
+      html += '<p class="cr-item-meta">' + esc(t('placeholder_item')) + '</p>';
     }
-    html += '<p class="cr-stem-text">' + esc(q.stem) + '</p>';
-    html += '<p class="cr-prompt-text">' + esc(q.prompt) + '</p>';
+    html += '<p class="cr-stem-text">' + esc(locCR(q, 'stem')) + '</p>';
+    html += '<p class="cr-prompt-text">' + esc(locCR(q, 'prompt')) + '</p>';
     stemHolder.innerHTML = html;
   }
 
@@ -1018,7 +1383,7 @@
     if (IS_CR_MODE) renderCRStem(q);
 
     var html = '';
-    html += '<p class="rct-question-progress">Question ' + (idx + 1) + ' of ' + QUESTIONS.length + '</p>';
+    html += '<p class="rct-question-progress">' + esc(tf('q_progress', { n: idx + 1, m: QUESTIONS.length })) + '</p>';
     html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
 
     if (q.type === 'cr') {
@@ -1027,9 +1392,9 @@
       var name = 'rct-' + q.id;
       html += '<div class="rct-question-options">';
       q.options.forEach(function (opt) {
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(opt.key + ') ' + opt.text) + '</span></label>';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(opt.key + ') ' + locOpt(q, opt)) + '</span></label>';
       });
-      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>I don\'t know</span></label>';
+      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>' + esc(t('idk')) + '</span></label>';
       html += '</div>';
     } else {
       // Legacy chart mode: True/False or multichoice
@@ -1041,19 +1406,17 @@
           html += '<label class="rct-option"><input type="radio" name="' + name + '" value="' + esc(opt.key) + '"/><span>' + esc(opt.key + ') ' + opt.text) + '</span></label>';
         });
       } else if (q.type === 'truefalse') {
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>True</span></label>';
-        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>False</span></label>';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="true"/><span>' + esc(t('tf_true')) + '</span></label>';
+        html += '<label class="rct-option"><input type="radio" name="' + name + '" value="false"/><span>' + esc(t('tf_false')) + '</span></label>';
       }
-      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>I don\'t know</span></label>';
+      html += '<label class="rct-option rct-option-idk"><input type="radio" name="' + name + '" value="idk"/><span>' + esc(t('idk')) + '</span></label>';
       html += '</div>';
     }
     html += '</div>';
-    var btnLabel = isLastQuestion() ? 'Finish' : 'Next question →';
-    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + btnLabel + '</button>';
-    var hintText = isLastQuestion()
-      ? 'You can change your selection until you click Finish.'
-      : 'You can change your selection until you click Next question.';
-    html += '<p class="rct-submit-hint">' + hintText + '</p>';
+    var btnLabel = isLastQuestion() ? t('btn_finish') : t('btn_next');
+    html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + esc(btnLabel) + '</button>';
+    var hintText = isLastQuestion() ? t('hint_finish') : t('hint_next');
+    html += '<p class="rct-submit-hint">' + esc(hintText) + '</p>';
     holder.innerHTML = html;
 
     $$('input[name="' + name + '"]').forEach(function (input) {
@@ -1127,10 +1490,10 @@
       persist();
       postToParent({ type: 'rct_complete' });
       var btn = $('#rct-submit-final');
-      if (btn) { btn.disabled = true; btn.textContent = 'Submitted'; }
+      if (btn) { btn.disabled = true; btn.textContent = t('submitted'); }
       $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
       var hint = $('.rct-submit-hint');
-      if (hint) hint.textContent = 'All answers recorded. Click Next to continue.';
+      if (hint) hint.textContent = t('all_recorded');
       postHeight();
     } else {
       // Advance to the next question.
@@ -1256,11 +1619,11 @@
     }
     if (currentQuestionAlreadyShared()) {
       btn.disabled = true;
-      btn.textContent = '✓ Chart shared';
+      btn.textContent = t('share_done');
       if (status) { status.textContent = ''; status.classList.remove('is-error'); }
     } else {
       btn.disabled = false;
-      btn.innerHTML = '<span aria-hidden="true" style="margin-right:6px">📊</span>Share chart with assistant';
+      btn.innerHTML = '<span aria-hidden="true" style="margin-right:6px">📊</span>' + esc(t('share_btn'));
       if (status) { status.textContent = ''; status.classList.remove('is-error'); }
     }
   }
@@ -1272,15 +1635,15 @@
     // Render the PNG eagerly so the cache is hot for the next chat send.
     rctRenderChartPng(q.id).then(function () {
       logEvent({ type: 'context_share', question_id: q.id });
-      appendContextChip('Chart and chart data shared with the assistant.');
+      appendContextChip(t('share_chip'));
       persist();
       refreshShareChartUI();
-      if (status) status.textContent = 'Attached — included with your next message.';
+      if (status) status.textContent = t('share_attached');
     }).catch(function (err) {
       var btn = $('#rct-share-chart-btn');
       if (btn) btn.disabled = false;
       if (status) {
-        status.textContent = 'Could not render chart image (' + (err && err.message || 'unknown') + ').';
+        status.textContent = tf('share_render_err', { msg: (err && err.message || 'unknown') });
         status.classList.add('is-error');
       }
     });
@@ -1309,8 +1672,8 @@
       if (RESET_CHAT_BETWEEN_QUESTIONS && e.question_id && e.question_id !== curId) return;
       if (e.type === 'prompt') appendBubble('user', e.content);
       else if (e.type === 'response') appendBubble('assistant', e.content);
-      else if (e.type === 'error' && e.error) appendBubble('error', 'Error: ' + e.error);
-      else if (e.type === 'context_share') appendContextChip('Chart and chart data shared with the assistant.');
+      else if (e.type === 'error' && e.error) appendBubble('error', t('error_prefix') + e.error);
+      else if (e.type === 'context_share') appendContextChip(t('share_chip'));
     });
   }
 
@@ -1757,7 +2120,7 @@
     var draft = await rctGenerateChatReply(messages, MODEL);
     if (draft.error) {
       logEvent({ type: 'error', error: draft.error, http_status: draft.http_status, latency_ms: draft.latency_ms });
-      appendBubble('error', 'Could not reach the assistant: ' + draft.error);
+      appendBubble('error', t('chat_unreachable') + draft.error);
       setChatBusy(false);
       persist();
       return;
@@ -1938,8 +2301,8 @@
           latency_ms: latency
         });
         showSearchError(IS_CR_MODE
-          ? 'Search is temporarily unavailable. Please try again, or answer based on the argument alone.'
-          : 'Search is temporarily unavailable. Please try again, or answer based on the chart alone.');
+          ? t('search_unavailable_cr')
+          : t('search_unavailable_chart'));
       }
       setSearchBusy(false);
       persist();
@@ -1950,11 +2313,11 @@
     var holder = $('#rct-search-results');
     if (!holder) return;
     if (!results.length) {
-      holder.innerHTML = '<p class="rct-search-meta">No results for <strong>' + esc(query) + '</strong>.</p>';
+      holder.innerHTML = '<p class="rct-search-meta">' + esc(t('no_results')) + '<strong>' + esc(query) + '</strong>.</p>';
       postHeight();
       return;
     }
-    var html = '<p class="rct-search-meta">' + results.length + ' results for <strong>' + esc(query) + '</strong></p>';
+    var html = '<p class="rct-search-meta">' + esc(tf('results_count', { n: results.length })) + '<strong>' + esc(query) + '</strong></p>';
     results.forEach(function (r, idx) {
       html += '<div class="rct-search-result" data-idx="' + idx + '">' +
                 '<div class="rct-search-url">' + esc(r.displayUrl || r.url) + '</div>' +
@@ -2147,10 +2510,10 @@
   if (isFinalised()) {
     lockPanel();
     var btn = $('#rct-submit-final');
-    if (btn) { btn.disabled = true; btn.textContent = 'Answer submitted'; }
+    if (btn) { btn.disabled = true; btn.textContent = t('answer_submitted'); }
     $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
     var hint = $('.rct-submit-hint');
-    if (hint) hint.textContent = 'Your answer has been recorded. Click Next to continue.';
+    if (hint) hint.textContent = t('answer_recorded');
     postToParent({ type: 'rct_complete' });
   }
 
