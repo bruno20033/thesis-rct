@@ -145,6 +145,13 @@
     try { window.parent.postMessage(msg, '*'); } catch (e) { /* sandbox */ }
   }
 
+  // Report current content height so the parent (Qualtrics bridge) can grow the
+  // iframe. Must run per item: 4–5 option items are taller than 2–3 option items,
+  // and if the iframe stays short the Next button gets clipped/unreachable.
+  function sendHeight() {
+    post({ type: 'rct_height', value: document.body.scrollHeight });
+  }
+
   // ── Render current item ──
   function renderItem() {
     var item = items[currentIndex];
@@ -188,6 +195,12 @@
     elTimer.className = 'timer';
     clearInterval(timerInterval);
     timerInterval = setInterval(tickTimer, 1000);
+
+    // Re-measure & report height for THIS item so the iframe grows enough to keep
+    // the Next button reachable. The chart <img> loads async, so re-report on load.
+    sendHeight();
+    var chartImg = elChart.querySelector('img');
+    if (chartImg) { chartImg.addEventListener('load', sendHeight); }
   }
 
   // ── Timer ──
