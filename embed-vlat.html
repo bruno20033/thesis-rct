@@ -90,7 +90,16 @@
   .rct-chart-area { padding: 16px; border-bottom: 1px solid #eceff1; background: #fff; flex: 0 0 auto; }
   /* Cap the chart so a tall (portrait) image can't push the question and the
      submit button off-screen; object-fit preserves the aspect ratio. */
-  .rct-chart-area .vlat-chart-img { max-height: 32vh; object-fit: contain; }
+  .rct-chart-area .vlat-chart-img { max-height: 32vh; object-fit: contain; cursor: zoom-in; }
+  #zoom-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+                  z-index: 9999; align-items: center; justify-content: center; }
+  #zoom-overlay.active { display: flex; }
+  #zoom-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;
+                      box-shadow: 0 4px 32px rgba(0,0,0,0.5); }
+  #zoom-close { position: fixed; top: 16px; right: 20px; font-size: 2.5rem; color: #fff;
+                cursor: pointer; line-height: 1; background: none; border: none; padding: 0;
+                opacity: 0.85; }
+  #zoom-close:hover { opacity: 1; }
   .rct-chart-svg { width: 100%; height: auto; display: block; }
   .rct-chart-title { font-size: 14px; font-weight: 500; fill: #263238; }
   .rct-chart-axis-label { font-size: 11px; fill: #607d8b; }
@@ -2510,9 +2519,27 @@
   setTimeout(postHeight, 250);
   setTimeout(postHeight, 1000);
 
+  // ── Chart zoom ──
+  window.closeZoom = function () {
+    document.getElementById('zoom-overlay').classList.remove('active');
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeZoom(); });
+  document.addEventListener('click', function (e) {
+    if (e.target.classList.contains('vlat-chart-img')) {
+      document.getElementById('zoom-img').src = e.target.src;
+      document.getElementById('zoom-img').alt = e.target.alt;
+      document.getElementById('zoom-overlay').classList.add('active');
+    }
+  });
+
   console.log('[RCT embed] init complete — condition=' + CONDITION + ', pid=' + PID +
     (IS_CR_MODE ? ', phase=' + PHASE + ', set=' + CR_SET + ', items=' + QUESTIONS.length : ''));
 })();
 </script>
+
+<div id="zoom-overlay" onclick="if(event.target===this)closeZoom()" role="dialog" aria-modal="true" aria-label="Zoomed chart">
+  <button id="zoom-close" onclick="closeZoom()" aria-label="Close">&times;</button>
+  <img id="zoom-img" src="" alt="">
+</div>
 </body>
 </html>

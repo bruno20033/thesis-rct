@@ -26,6 +26,18 @@
   .chart-placeholder .title { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 8px; }
   .chart-placeholder .hint { font-size: 0.85rem; }
 
+  /* ── Zoom overlay ── */
+  .chart-container img { cursor: zoom-in; }
+  #zoom-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+                  z-index: 9999; align-items: center; justify-content: center; }
+  #zoom-overlay.active { display: flex; }
+  #zoom-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;
+                      box-shadow: 0 4px 32px rgba(0,0,0,0.5); }
+  #zoom-close { position: fixed; top: 16px; right: 20px; font-size: 2.5rem; color: #fff;
+                cursor: pointer; line-height: 1; background: none; border: none; padding: 0;
+                opacity: 0.85; }
+  #zoom-close:hover { opacity: 1; }
+
   /* ── Question ── */
   .question-text { font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px; font-weight: 500; }
 
@@ -350,10 +362,28 @@
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 
+  // ── Chart zoom ──
+  window.closeZoom = function () {
+    document.getElementById('zoom-overlay').classList.remove('active');
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeZoom(); });
+  elChart.addEventListener('click', function (e) {
+    if (e.target.tagName === 'IMG') {
+      document.getElementById('zoom-img').src = e.target.src;
+      document.getElementById('zoom-img').alt = e.target.alt;
+      document.getElementById('zoom-overlay').classList.add('active');
+    }
+  });
+
   // ── Start ──
   renderItem();
   post({ type: 'rct_height', value: document.body.scrollHeight });
 })();
 </script>
+
+<div id="zoom-overlay" onclick="if(event.target===this)closeZoom()" role="dialog" aria-modal="true" aria-label="Zoomed chart">
+  <button id="zoom-close" onclick="closeZoom()" aria-label="Close">&times;</button>
+  <img id="zoom-img" src="" alt="">
+</div>
 </body>
 </html>
