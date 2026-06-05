@@ -1,7 +1,7 @@
 /**
  * Cloudflare Worker — proxy for the RCT Treatment Embed.
  *
- * Three routes, same Worker:
+ * Four routes, same Worker:
  *   POST /  or  POST /llm     → forwards to OpenRouter chat completions
  *                               with the secret OPENROUTER_API_KEY (the
  *                               participant-facing generator).
@@ -14,6 +14,12 @@
  *                               The Judge model is supplied per request
  *                               in the `model` body field, so the Judge
  *                               provider can be swapped without re-deploy.
+ *   POST /fetch               → fetches the given URL server-side, strips
+ *                               boilerplate (nav/header/footer/scripts),
+ *                               and returns {title, site, blocks} for the
+ *                               embed.html reader-mode fallback. Triggered
+ *                               automatically when an iframe is blocked by
+ *                               X-Frame-Options / CSP frame-ancestors.
  *
  * History: the SEARCH route originally targeted Google Programmable
  * Search (Google removed "search the entire web" for new engines in
@@ -243,6 +249,65 @@ export default {
     }
 
     // ---------------------------------------------------------------
+    // FETCH route (POST /fetch) → server-side page fetch + text
+    // extraction for the reader-mode fallback. Called automatically
+    // by embed.html when an iframe is blocked by X-Frame-Options / CSP.
+    // Returns {title, site, blocks} where blocks is an ordered array of
+    // {type:'h'|'p'|'li', text, level?} suitable for safe rendering.
+    // ---------------------------------------------------------------
+    if (url.pathname === '/fetch') {
+      if (request.method !== 'POST') {
+        return json({ error: 'Method Not Allowed' }, 405, request, env);
+      }
+
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'Invalid JSON body' }, 400, request, env); }
+      const targetUrl = (body && body.url ? String(body.url) : '').trim();
+      if (!targetUrl) {
+        return json({ error: 'url required' }, 400, request, env);
+      }
+
+      let parsed;
+      try {
+        parsed = new URL(targetUrl);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          return json({ error: 'Only http/https URLs are supported' }, 400, request, env);
+        }
+      } catch {
+        return json({ error: 'Invalid URL' }, 400, request, env);
+      }
+
+      let upstream;
+      try {
+        upstream = await fetch(targetUrl, {
+          method: 'GET',
+          headers: {
+            'User-Agent':      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+            'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+      } catch (err) {
+        return json({ error: 'Fetch failed: ' + String(err && err.message || err) }, 502, request, env);
+      }
+
+      if (!upstream.ok) {
+        return json({ error: 'Upstream HTTP ' + upstream.status }, 502, request, env);
+      }
+
+      const ct = upstream.headers.get('content-type') || '';
+      if (!ct.includes('html')) {
+        return json({ error: 'Not an HTML page (' + ct.split(';')[0].trim() + ')' }, 415, request, env);
+      }
+
+      let html = await upstream.text();
+      if (html.length > 200000) html = html.slice(0, 200000);
+
+      const extracted = extractContent(html);
+      return json({ title: extracted.title, site: parsed.hostname, blocks: extracted.blocks }, 200, request, env);
+    }
+
+    // ---------------------------------------------------------------
     // Anything else → 404
     // ---------------------------------------------------------------
     return json({ error: 'Not found: ' + url.pathname }, 404, request, env);
@@ -378,4 +443,57 @@ function stripHtml(s) {
     .replace(/&hellip;/g, '…')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+// -------------------------------------------------------------------
+// Page content extractor — used by the /fetch reader-mode route.
+// Strips boilerplate (nav/header/footer/scripts/styles), then extracts
+// headings, paragraphs, and list items in document order.
+// Returns { title: string, blocks: [{type, text, level?}] }.
+// -------------------------------------------------------------------
+function extractContent(html) {
+  var titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(html);
+  var title = titleMatch ? stripHtml(titleMatch[1]) : '';
+
+  // Remove non-content sections before extracting blocks.
+  var cleaned = html
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<nav\b[\s\S]*?<\/nav>/gi, ' ')
+    .replace(/<header\b[\s\S]*?<\/header>/gi, ' ')
+    .replace(/<footer\b[\s\S]*?<\/footer>/gi, ' ')
+    .replace(/<aside\b[\s\S]*?<\/aside>/gi, ' ')
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ');
+
+  var elements = [];
+  var m;
+
+  var headingRe = /<h([1-6])\b[^>]*>([\s\S]*?)<\/h\1>/gi;
+  while ((m = headingRe.exec(cleaned)) !== null) {
+    var t = stripHtml(m[2]);
+    if (t.length > 3) elements.push({ pos: m.index, type: 'h', level: Number(m[1]), text: t });
+  }
+
+  var paraRe = /<p\b[^>]*>([\s\S]*?)<\/p>/gi;
+  while ((m = paraRe.exec(cleaned)) !== null) {
+    var t = stripHtml(m[1]);
+    if (t.length > 20) elements.push({ pos: m.index, type: 'p', text: t });
+  }
+
+  var liRe = /<li\b[^>]*>([\s\S]*?)<\/li>/gi;
+  while ((m = liRe.exec(cleaned)) !== null) {
+    var t = stripHtml(m[1]);
+    if (t.length > 10) elements.push({ pos: m.index, type: 'li', text: t });
+  }
+
+  elements.sort(function (a, b) { return a.pos - b.pos; });
+
+  var blocks = elements.slice(0, 60).map(function (e) {
+    var b = { type: e.type, text: e.text };
+    if (e.type === 'h') b.level = e.level;
+    return b;
+  });
+
+  return { title: title, blocks: blocks };
 }
