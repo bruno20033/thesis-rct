@@ -46,48 +46,59 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       var log = data.payload;
       var Q = Qualtrics.SurveyEngine;
       try {
-        Q.setEmbeddedData('InteractionLog', JSON.stringify(log));
+        // Determine field prefix from log.phase. The training phase
+        // (default / null) writes to unprefixed fields for backward compat;
+        // posttest/delayed phases prefix with the phase name so their
+        // data doesn't overwrite the training-phase fields.
+        var phase = log.phase || '';
+        var pfx = (!phase || phase === 'train') ? '' : phase + '_';
+
+        Q.setEmbeddedData(pfx + 'InteractionLog', JSON.stringify(log));
         // Analyst-friendly per-condition dictionary view (see README §
         // "interaction_log dictionary schema" for the exact shape).
         // Written alongside the rich InteractionLog JSON so analysts can
         // read prompts → responses (or queries → click lists) straight
         // out of CSV export without parsing the events array.
-        Q.setEmbeddedData('interaction_log', JSON.stringify(buildInteractionLogDict(log)));
+        Q.setEmbeddedData(pfx + 'interaction_log', JSON.stringify(buildInteractionLogDict(log)));
         Q.setEmbeddedData('condition',       log.condition || '');
         Q.setEmbeddedData('participant_id',  log.participant_id || '');
         Q.setEmbeddedData('model_used',      log.model_used || '');
-        Q.setEmbeddedData('prompt_count',    String(log.prompt_count   || 0));
-        Q.setEmbeddedData('response_count',  String(log.response_count || 0));
-        Q.setEmbeddedData('session_id',      log.session_id || '');
+        Q.setEmbeddedData(pfx + 'prompt_count',    String(log.prompt_count   || 0));
+        Q.setEmbeddedData(pfx + 'response_count',  String(log.response_count || 0));
+        Q.setEmbeddedData(pfx + 'session_id',      log.session_id || '');
         // arm: 'socratic' | 'unrestricted' for LLM condition; '' for SEARCH.
         Q.setEmbeddedData('arm',             log.arm || '');
         // Judge metadata (Socratic arm only — empty for other arms).
-        Q.setEmbeddedData('judge_model',         log.judge_model || '');
-        Q.setEmbeddedData('judge_mode',          log.judge_mode  || '');
-        Q.setEmbeddedData('judge_call_count',    String(log.judge_call_count    || 0));
-        Q.setEmbeddedData('judge_failure_count', String(log.judge_failure_count || 0));
+        Q.setEmbeddedData(pfx + 'judge_model',         log.judge_model || '');
+        Q.setEmbeddedData(pfx + 'judge_mode',          log.judge_mode  || '');
+        Q.setEmbeddedData(pfx + 'judge_call_count',    String(log.judge_call_count    || 0));
+        Q.setEmbeddedData(pfx + 'judge_failure_count', String(log.judge_failure_count || 0));
         // Multi-question progress — written on every interaction so
         // analysts can see how far each participant got (and split
         // drop-outs by which question they abandoned on).
-        Q.setEmbeddedData('current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
-        Q.setEmbeddedData('question_count',         String(log.question_count        != null ? log.question_count        : 0));
+        Q.setEmbeddedData(pfx + 'current_question_index', String(log.current_question_index != null ? log.current_question_index : 0));
+        Q.setEmbeddedData(pfx + 'question_count',         String(log.question_count        != null ? log.question_count        : 0));
         if (log.answers) {
           Object.keys(log.answers).forEach(function (qid) {
             var v = log.answers[qid];
+            // Answer fields use the question ID as the key (e.g. A-E1_answer,
+            // F-E1_answer). IDs are unique across sets, so no prefix needed.
             Q.setEmbeddedData(qid + '_answer', v === null || v === undefined ? '' : String(v));
           });
         }
 
         // -------------------------------------------------------------
-        // Flatten prompts and responses into per-turn fields and a
-        // concatenated transcript so analysts can read them straight
-        // from the Qualtrics CSV without parsing InteractionLog JSON.
-        //
-        // Per-turn fields are written for up to MAX_TURNS conversation
-        // turns. Declare prompt_1..prompt_N and response_1..response_N
-        // (and search_query_1..search_query_N) in Survey Flow's
-        // Embedded Data so they appear as CSV columns.
+        // Per-turn fields and aggregates. Only written for the training
+        // phase (LLM/SEARCH conditions have chat/search interactions).
+        // Posttest/delayed phases have no interactions to flatten, and
+        // writing them would overwrite training-phase data.
         // -------------------------------------------------------------
+        // Parse events BEFORE the pfx guard — events array is also
+        // needed by the CR-mode per-item timing block below (which
+        // runs for all phases, not just training).
+        var events = log.events || [];
+
+        if (!pfx) {
         var MAX_TURNS = 20;
         var prompts        = [];
         var responses      = [];
@@ -95,7 +106,6 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         var clicks         = [];   // result_click events    (SEARCH condition)
         var dwells         = [];   // result_dwell events    (SEARCH condition)
         var judgements     = [];   // judge_result events on initial drafts (Socratic arm)
-        var events = log.events || [];
         for (var i = 0; i < events.length; i++) {
           var ev = events[i];
           if      (ev.type === 'prompt'               && ev.content) prompts.push(ev.content);
@@ -173,6 +183,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
         Q.setEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
         Q.setEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
+        } // end if (!pfx) — per-turn + aggregate fields for training phase only
 
         // ---------------------------------------------------------
         // CR (Critical Reasoning) mode fields
@@ -184,13 +195,16 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData('cr_set',   log.cr_set || '');
 
         if (data.cr_items && Array.isArray(data.cr_items)) {
-          var prefix = (log.phase === 'train') ? 'cr_train' : 'cr_post';
+          var prefix;
+          if (log.phase === 'train') prefix = 'cr_train';
+          else if (log.phase === 'delayed') prefix = 'cr_delayed';
+          else prefix = 'cr_post';
 
           // Aggregate scores
           Q.setEmbeddedData(prefix + '_total', String(data.cr_score != null ? data.cr_score : ''));
-          if (prefix === 'cr_post') {
-            Q.setEmbeddedData('cr_post_near', String(data.cr_near != null ? data.cr_near : ''));
-            Q.setEmbeddedData('cr_post_far',  String(data.cr_far  != null ? data.cr_far  : ''));
+          if (prefix !== 'cr_train') {
+            Q.setEmbeddedData(prefix + '_near', String(data.cr_near != null ? data.cr_near : ''));
+            Q.setEmbeddedData(prefix + '_far',  String(data.cr_far  != null ? data.cr_far  : ''));
           }
 
           // Per-item fields: answer, correctness, item ID (in presentation order)
@@ -220,6 +234,38 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         }
       } catch (e) {
         console.warn('[RCT bridge] setEmbeddedData failed:', e);
+      }
+    }
+
+    // ---------------------------------------------------------
+    // VLAT / Mini-VLAT item-level and block-level handlers.
+    // The VLAT survey pages send vlat_item_response per item
+    // and vlat_block_complete after the last item. Each message
+    // carries the exact Embedded Data field names to write.
+    // ---------------------------------------------------------
+    if (data.type === 'vlat_item_response') {
+      var Q = Qualtrics.SurveyEngine;
+      try {
+        // Determine prefix: minivlat items use minivlat_, VLAT items use vlat_
+        var vPrefix = (data.block === 'minivlat') ? 'minivlat_' : 'vlat_';
+        Q.setEmbeddedData(vPrefix + data.itemId + '_response', String(data.response || ''));
+        Q.setEmbeddedData(vPrefix + data.itemId + '_rt',       String(data.rt       || 0));
+        Q.setEmbeddedData(vPrefix + data.itemId + '_timeout',  String(data.timeout  || false));
+      } catch (e) {
+        console.warn('[RCT bridge] vlat_item_response write failed:', e);
+      }
+    }
+
+    if (data.type === 'vlat_block_complete' && data.embeddedData) {
+      var Q = Qualtrics.SurveyEngine;
+      try {
+        // Write all pre-built Embedded Data fields from the VLAT page.
+        // These include per-item response/rt/timeout + block summaries.
+        Object.keys(data.embeddedData).forEach(function (k) {
+          Q.setEmbeddedData(k, String(data.embeddedData[k]));
+        });
+      } catch (e) {
+        console.warn('[RCT bridge] vlat_block_complete write failed:', e);
       }
     }
 

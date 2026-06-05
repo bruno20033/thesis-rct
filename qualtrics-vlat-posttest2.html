@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VLAT Post-test 2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+         background: #fff; color: #1a1a2e; padding: 24px; max-width: 800px; margin: 0 auto; }
+
+  /* ── Progress & Timer ── */
+  .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  .progress { font-size: 0.9rem; color: #495057; font-weight: 600; }
+  .progress-bar { width: 200px; height: 6px; background: #e9ecef; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+  .progress-fill { height: 100%; background: #228be6; transition: width 0.3s; }
+  .timer { font-size: 1.1rem; font-weight: 700; padding: 6px 14px; border-radius: 20px; background: #f1f3f5; }
+  .timer.warning { background: #fff3bf; color: #e67700; }
+  .timer.critical { background: #ffe3e3; color: #c92a2a; }
+
+  /* ── Chart ── */
+  .chart-container { text-align: center; margin-bottom: 24px; }
+  .chart-container img { max-width: 700px; width: 100%; border: 1px solid #dee2e6; border-radius: 8px; }
+  .chart-placeholder { max-width: 700px; margin: 0 auto; padding: 60px 40px; background: #f8f9fa;
+                        border: 2px dashed #ced4da; border-radius: 8px; color: #868e96; text-align: center; }
+  .chart-placeholder .title { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 8px; }
+  .chart-placeholder .hint { font-size: 0.85rem; }
+
+  /* ── Zoom overlay ── */
+  .chart-container img { cursor: zoom-in; }
+  #zoom-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+                  z-index: 9999; align-items: center; justify-content: center; }
+  #zoom-overlay.active { display: flex; }
+  #zoom-overlay img { max-width: 90vw; max-height: 90vh; object-fit: contain; border-radius: 4px;
+                      box-shadow: 0 4px 32px rgba(0,0,0,0.5); }
+  #zoom-close { position: fixed; top: 16px; right: 20px; font-size: 2.5rem; color: #fff;
+                cursor: pointer; line-height: 1; background: none; border: none; padding: 0;
+                opacity: 0.85; }
+  #zoom-close:hover { opacity: 1; }
+
+  /* ── Question ── */
+  .question-text { font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px; font-weight: 500; }
+
+  /* ── Answer Options ── */
+  .options { list-style: none; margin-bottom: 20px; }
+  .option { display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px;
+            border: 2px solid #e9ecef; border-radius: 8px; cursor: pointer; transition: all 0.15s; }
+  .option:hover { border-color: #228be6; background: #f0f7ff; }
+  .option.selected { border-color: #228be6; background: #e7f5ff; }
+  .option input[type="radio"] { margin-right: 12px; width: 18px; height: 18px; cursor: pointer; }
+  .option label { cursor: pointer; flex: 1; font-size: 1rem; }
+  .option .label-key { font-weight: 700; color: #228be6; margin-right: 8px; }
+  .option.omit { border-style: dashed; }
+  .option.omit label { color: #868e96; font-style: italic; }
+  .option.omit .label-key { color: #868e96; }
+
+  /* ── Next Button ── */
+  .btn-next { display: block; margin: 0 auto; padding: 12px 48px; font-size: 1rem; font-weight: 600;
+              background: #228be6; color: #fff; border: none; border-radius: 8px; cursor: pointer; }
+  .btn-next:hover { background: #1c7ed6; }
+  .btn-next:disabled { background: #adb5bd; cursor: not-allowed; }
+
+  /* ── Completion ── */
+  .complete-screen { text-align: center; padding: 60px 20px; }
+  .complete-screen h2 { font-size: 1.5rem; margin-bottom: 12px; color: #2b8a3e; }
+  .complete-screen p { color: #495057; font-size: 1rem; }
+</style>
+</head>
+<body>
+
+<div id="quiz-container">
+  <div class="top-bar">
+    <div>
+      <div class="progress"><span id="lbl-question">Question</span> <span id="q-current">1</span> <span id="lbl-of">of</span> <span id="q-total">?</span></div>
+      <div class="progress-bar"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
+    </div>
+    <div id="timer" class="timer">25s</div>
+  </div>
+
+  <div id="chart-area" class="chart-container"></div>
+  <div id="question-text" class="question-text"></div>
+  <ul id="options-list" class="options"></ul>
+  <button id="btn-next" class="btn-next" disabled onclick="submitAnswer()">Next</button>
+</div>
+
+<div id="complete-screen" class="complete-screen" style="display:none">
+  <h2 id="complete-title">Block Complete</h2>
+  <p id="complete-body">Your responses have been recorded. Please wait...</p>
+</div>
+
+<script src="vlat_items_data.js"></script>
+<script>
+(function () {
+  // ── Configuration ──
+  var BLOCK = 'posttest2';
+  var TIME_LIMIT = 25; // seconds per item
+
+  // ── Parse URL params ──
+  var params = new URLSearchParams(window.location.search);
+  var pid = params.get('pid') || 'default';
+
+  // ── Language (mirrors embed.html) ──
+  // Passed from Qualtrics via &lang=${e://Field/Q_Language}. Key off the
+  // first two letters ('EN', 'DE', 'DE-DE'); anything else falls back to EN.
+  var LANG = ((params.get('lang') || 'EN').slice(0, 2)).toUpperCase();
+  if (LANG !== 'DE') LANG = 'EN';
+  try { document.documentElement.lang = LANG.toLowerCase(); } catch (_) {}
+
+  // Resolve a localized field with English fallback (e.g. loc(item,'questionText')).
+  function loc(o, field) {
+    if (LANG === 'DE' && o && o[field + '_de'] != null) return o[field + '_de'];
+    return o ? o[field] : undefined;
+  }
+
+  // Static UI strings.
+  var UI = {
+    EN: { question: 'Question', of: 'of', next: 'Next', idk: "I don't know",
+          completeTitle: 'Block Complete',
+          completeBody: 'Your responses have been recorded. Please wait...',
+          noItems: 'No items found for block: ', chartFail: 'Chart image not loaded — ' },
+    DE: { question: 'Frage', of: 'von', next: 'Weiter', idk: 'Ich weiß es nicht',
+          completeTitle: 'Block abgeschlossen',
+          completeBody: 'Ihre Antworten wurden gespeichert. Bitte warten …',
+          noItems: 'Keine Items für diesen Block gefunden: ', chartFail: 'Diagrammbild nicht geladen — ' }
+  };
+  function t(k) { return (UI[LANG] && UI[LANG][k] != null) ? UI[LANG][k] : UI.EN[k]; }
+
+  // ── Filter items for this block ──
+  var items = VLAT_ITEMS.filter(function (i) { return i.block === BLOCK; });
+  if (items.length === 0) { document.body.innerHTML = '<p>' + t('noItems') + BLOCK + '</p>'; return; }
+
+  // ── Seeded shuffle ──
+  function seededRandom(seed) {
+    var x = Math.sin(seed++) * 10000;
+    return x - Math.floor(x);
+  }
+  function hashString(str) {
+    var hash = 0;
+    for (var i = 0; i < str.length; i++) {
+      var ch = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + ch;
+      hash |= 0;
+    }
+    return Math.abs(hash);
+  }
+  function shuffleArray(arr, seed) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(seededRandom(seed + i) * (i + 1));
+      var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+    }
+    return a;
+  }
+
+  var seed = hashString(pid + '_' + BLOCK);
+  items = shuffleArray(items, seed);
+  var itemOrder = items.map(function (i) { return i.id; });
+
+  // ── State ──
+  var currentIndex = 0;
+  var selectedResponse = null;
+  var itemStartTime = 0;
+  var timerInterval = null;
+  var timeRemaining = TIME_LIMIT;
+  var blockStartTime = Date.now();
+  var responses = []; // { itemId, response, rt, timeout, questionText, options }
+
+  // ── DOM refs ──
+  var elCurrent = document.getElementById('q-current');
+  var elTotal = document.getElementById('q-total');
+  var elProgressFill = document.getElementById('progress-fill');
+  var elTimer = document.getElementById('timer');
+  var elChart = document.getElementById('chart-area');
+  var elQuestion = document.getElementById('question-text');
+  var elOptions = document.getElementById('options-list');
+  var elNext = document.getElementById('btn-next');
+
+  elTotal.textContent = String(items.length);
+
+  // Apply static UI labels for the current language.
+  (function applyUiLabels() {
+    var set = function (id, val) { var el = document.getElementById(id); if (el) el.textContent = val; };
+    set('lbl-question', t('question'));
+    set('lbl-of', t('of'));
+    set('complete-title', t('completeTitle'));
+    set('complete-body', t('completeBody'));
+    if (elNext) elNext.textContent = t('next');
+  })();
+
+  // ── Post to parent (Qualtrics) ──
+  function post(msg) {
+    try { window.parent.postMessage(msg, '*'); } catch (e) { /* sandbox */ }
+  }
+
+  // Report current content height so the parent (Qualtrics bridge) can grow the
+  // iframe. Must run per item: 4–5 option items are taller than 2–3 option items,
+  // and if the iframe stays short the Next button gets clipped/unreachable.
+  function sendHeight() {
+    post({ type: 'rct_height', value: document.body.scrollHeight });
+  }
+
+  // ── Render current item ──
+  function renderItem() {
+    var item = items[currentIndex];
+    selectedResponse = null;
+    elNext.disabled = true;
+    elCurrent.textContent = String(currentIndex + 1);
+    elProgressFill.style.width = ((currentIndex / items.length) * 100) + '%';
+
+    // Chart
+    var chartInfo = VLAT_CHARTS[item.chartId];
+    var chartTitle = chartInfo ? loc(chartInfo, 'title') : item.chartId;
+    var imgPath = 'charts/' + item.chartId + '.png';
+
+    elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escHtml(chartTitle) + '" ' +
+      'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' +
+      escHtml(chartTitle) + '</div><div class=hint>[' + escHtml(t('chartFail')) + escHtml(item.chartType) + ']</div></div>\'">';
+
+    // Question
+    elQuestion.textContent = loc(item, 'questionText');
+
+    // Options
+    var html = '';
+    for (var i = 0; i < item.options.length; i++) {
+      var opt = item.options[i];
+      html += '<li class="option" data-value="' + escAttr(opt.label) + '" onclick="selectOption(this)">';
+      html += '<input type="radio" name="answer" id="opt_' + i + '">';
+      html += '<label for="opt_' + i + '"><span class="label-key">' + escHtml(opt.label) + '</span>' + escHtml(loc(opt, 'text')) + '</label>';
+      html += '</li>';
+    }
+    // "I don't know" option
+    html += '<li class="option omit" data-value="omit" onclick="selectOption(this)">';
+    html += '<input type="radio" name="answer" id="opt_omit">';
+    html += '<label for="opt_omit">' + escHtml(t('idk')) + '</label>';
+    html += '</li>';
+    elOptions.innerHTML = html;
+
+    // Start timer
+    itemStartTime = Date.now();
+    timeRemaining = TIME_LIMIT;
+    elTimer.textContent = TIME_LIMIT + 's';
+    elTimer.className = 'timer';
+    clearInterval(timerInterval);
+    timerInterval = setInterval(tickTimer, 1000);
+
+    // Re-measure & report height for THIS item so the iframe grows enough to keep
+    // the Next button reachable. The chart <img> loads async, so re-report on load.
+    sendHeight();
+    var chartImg = elChart.querySelector('img');
+    if (chartImg) { chartImg.addEventListener('load', sendHeight); }
+  }
+
+  // ── Timer ──
+  function tickTimer() {
+    timeRemaining--;
+    elTimer.textContent = timeRemaining + 's';
+    if (timeRemaining <= 5) elTimer.className = 'timer critical';
+    else if (timeRemaining <= 10) elTimer.className = 'timer warning';
+    else elTimer.className = 'timer';
+
+    if (timeRemaining <= 0) {
+      clearInterval(timerInterval);
+      recordResponse('timeout', true);
+    }
+  }
+
+  // ── Option selection ──
+  window.selectOption = function (el) {
+    // Deselect all
+    var opts = elOptions.querySelectorAll('.option');
+    for (var i = 0; i < opts.length; i++) {
+      opts[i].classList.remove('selected');
+      opts[i].querySelector('input').checked = false;
+    }
+    // Select this one
+    el.classList.add('selected');
+    el.querySelector('input').checked = true;
+    selectedResponse = el.getAttribute('data-value');
+    elNext.disabled = false;
+  };
+
+  // ── Submit answer ──
+  window.submitAnswer = function () {
+    if (!selectedResponse) return;
+    clearInterval(timerInterval);
+    recordResponse(selectedResponse, false);
+  };
+
+  // ── Record response and advance ──
+  function recordResponse(response, isTimeout) {
+    var item = items[currentIndex];
+    var rt = Date.now() - itemStartTime;
+    var optionTexts = item.options.map(function (o) { return o.text; });
+
+    var entry = {
+      itemId: item.id,
+      response: response,
+      rt: rt,
+      timeout: isTimeout,
+      questionText: item.questionText,
+      options: optionTexts
+    };
+    responses.push(entry);
+
+    // Send per-item message
+    post({ type: 'vlat_item_response', itemId: item.id, response: response,
+           rt: rt, timeout: isTimeout, questionText: item.questionText, options: optionTexts });
+
+    // Advance
+    currentIndex++;
+    if (currentIndex < items.length) {
+      renderItem();
+    } else {
+      finishBlock();
+    }
+  }
+
+  // ── Finish block ──
+  function finishBlock() {
+    clearInterval(timerInterval);
+    var totalTime = Date.now() - blockStartTime;
+    var answered = responses.filter(function (r) { return r.response !== 'timeout'; }).length;
+
+    // Build embedded data object
+    var ed = {};
+    responses.forEach(function (r) {
+      ed['vlat_' + r.itemId + '_response'] = r.response;
+      ed['vlat_' + r.itemId + '_rt'] = String(r.rt);
+      ed['vlat_' + r.itemId + '_timeout'] = String(r.timeout);
+    });
+    ed['vlat_' + BLOCK + '_completed'] = 'true';
+    ed['vlat_' + BLOCK + '_total_time'] = String(totalTime);
+    ed['vlat_' + BLOCK + '_items_answered'] = String(answered);
+    ed['vlat_' + BLOCK + '_order'] = itemOrder.join(',');
+    // Score is not computed here (no answer key) — set to count of non-omit/non-timeout
+    ed['vlat_' + BLOCK + '_score'] = String(responses.filter(function (r) { return r.response !== 'omit' && r.response !== 'timeout'; }).length);
+    ed['vlat_' + BLOCK + '_total'] = String(items.length);
+
+    post({
+      type: 'vlat_block_complete',
+      block: BLOCK,
+      score: responses.filter(function (r) { return r.response !== 'omit' && r.response !== 'timeout'; }).length,
+      total: items.length,
+      itemsAnswered: answered,
+      totalTime: totalTime,
+      order: itemOrder,
+      embeddedData: ed
+    });
+
+    // Signal Qualtrics to show Next button
+    post({ type: 'rct_complete' });
+
+    // Show completion screen
+    document.getElementById('quiz-container').style.display = 'none';
+    document.getElementById('complete-screen').style.display = 'block';
+
+    // Report height
+    post({ type: 'rct_height', value: document.body.scrollHeight });
+  }
+
+  // ── Helpers ──
+  function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+
+  // ── Chart zoom ──
+  window.closeZoom = function () {
+    document.getElementById('zoom-overlay').classList.remove('active');
+  };
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeZoom(); });
+  elChart.addEventListener('click', function (e) {
+    if (e.target.tagName === 'IMG') {
+      document.getElementById('zoom-img').src = e.target.src;
+      document.getElementById('zoom-img').alt = e.target.alt;
+      document.getElementById('zoom-overlay').classList.add('active');
+    }
+  });
+
+  // ── Start ──
+  renderItem();
+  post({ type: 'rct_height', value: document.body.scrollHeight });
+})();
+</script>
+
+<div id="zoom-overlay" onclick="if(event.target===this)closeZoom()" role="dialog" aria-modal="true" aria-label="Zoomed chart">
+  <button id="zoom-close" onclick="closeZoom()" aria-label="Close">&times;</button>
+  <img id="zoom-img" src="" alt="">
+</div>
+</body>
+</html>

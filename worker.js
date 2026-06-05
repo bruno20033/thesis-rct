@@ -83,7 +83,10 @@ export default {
     const origin = request.headers.get('Origin') || '';
     const allowed = (env.ALLOWED_ORIGINS || '')
       .split(',').map(s => s.trim()).filter(Boolean);
-    if (allowed.length > 0 && !allowed.includes(origin)) {
+    // /export is token-protected, not origin-protected (called from curl/scripts)
+    if (url.pathname === '/export' && request.method === 'GET') {
+      // skip origin check
+    } else if (allowed.length > 0 && !allowed.includes(origin)) {
       return json({ error: 'Forbidden origin: ' + origin }, 403, request, env);
     }
 
@@ -305,6 +308,86 @@ export default {
 
       const extracted = extractContent(html);
       return json({ title: extracted.title, site: parsed.hostname, blocks: extracted.blocks }, 200, request, env);
+    }
+
+    // ---------------------------------------------------------------
+    // LOG route (POST /log) → persist session data to KV.
+    // Each persist() call from embed.html sends the full
+    // InteractionLog + CR scoring data. KV key is
+    // {participant_id}_{condition}_{phase} so later calls
+    // overwrite (upsert) with the latest state.
+    // ---------------------------------------------------------------
+    if (url.pathname === '/log') {
+      if (request.method !== 'POST') {
+        return json({ error: 'Method Not Allowed' }, 405, request, env);
+      }
+      if (!env.RCT_LOGS) {
+        return json({ error: 'Worker misconfigured: RCT_LOGS KV not bound' }, 500, request, env);
+      }
+
+      let body;
+      try { body = await request.json(); } catch {
+        return json({ error: 'Invalid JSON body' }, 400, request, env);
+      }
+
+      var log = body.log;       // full InteractionLog object
+      var cr  = body.cr || {};   // cr_score, cr_items, etc. (may be empty)
+      if (!log || !log.participant_id || !log.session_id) {
+        return json({ error: 'log.participant_id and log.session_id required' }, 400, request, env);
+      }
+
+      var phase = log.phase || 'train';
+      var cond  = log.condition || 'UNKNOWN';
+      var key   = log.participant_id + '_' + cond + '_' + phase;
+
+      var record = {
+        log: log,
+        cr: cr,
+        updated_at: new Date().toISOString(),
+      };
+
+      await env.RCT_LOGS.put(key, JSON.stringify(record));
+      return json({ ok: true, key: key }, 200, request, env);
+    }
+
+    // ---------------------------------------------------------------
+    // EXPORT route (GET /export) → bulk-download all KV records as
+    // JSON. Protected by a bearer token (env.EXPORT_TOKEN) so only
+    // the researcher can pull data.
+    // ---------------------------------------------------------------
+    if (url.pathname === '/export') {
+      if (request.method !== 'GET') {
+        return json({ error: 'Method Not Allowed' }, 405, request, env);
+      }
+      if (!env.RCT_LOGS) {
+        return json({ error: 'Worker misconfigured: RCT_LOGS KV not bound' }, 500, request, env);
+      }
+
+      var authHeader = request.headers.get('Authorization') || '';
+      var token = authHeader.replace(/^Bearer\s+/i, '');
+      if (!env.EXPORT_TOKEN || token !== env.EXPORT_TOKEN) {
+        return json({ error: 'Unauthorized' }, 401, request, env);
+      }
+
+      var keys = [];
+      var cursor = null;
+      do {
+        var listOpts = cursor ? { cursor: cursor } : {};
+        var list = await env.RCT_LOGS.list(listOpts);
+        keys.push(...list.keys);
+        cursor = list.list_complete ? null : list.cursor;
+      } while (cursor);
+
+      var records = [];
+      for (var i = 0; i < keys.length; i++) {
+        var val = await env.RCT_LOGS.get(keys[i].name);
+        if (val) {
+          try { records.push({ key: keys[i].name, ...JSON.parse(val) }); }
+          catch (e) { records.push({ key: keys[i].name, raw: val }); }
+        }
+      }
+
+      return json({ count: records.length, records: records }, 200, request, env);
     }
 
     // ---------------------------------------------------------------

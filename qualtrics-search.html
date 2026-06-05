@@ -12,6 +12,12 @@
                                 id for this response. Used by the
                                 embed as the `pid` query param so all
                                 interactions are scoped per participant.
+    ${e://Field/Q_Language}  → Qualtrics' built-in active survey language
+                                code (e.g. 'EN', 'DE'). Piped into the
+                                embed's `lang` param so the iframe UI and
+                                items follow the participant's chosen
+                                language. embed.html falls back to English
+                                for any code it has no translation for.
 
   No `arm` parameter is needed — the SEARCH condition is the DuckDuckGo-
   only control and has no Socratic/Unrestricted variants.
@@ -24,7 +30,7 @@
   ====================================================================
 -->
 <iframe
-  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=SEARCH&phase=train&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed.html?condition=SEARCH&phase=train&set=${e://Field/cr_set}&pid=${e://Field/ResponseID}&lang=${e://Field/Q_Language}"
   width="100%"
   height="800"
   frameborder="0"
