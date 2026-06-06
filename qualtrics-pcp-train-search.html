@@ -1,0 +1,33 @@
+<!--
+  SEARCH-CONDITION QUALTRICS QUESTION TEXT (PCP Aided Training Phase)
+  ====================================================================
+  Paste the single <iframe> line below into the SEARCH question's
+  Question Text via the rich-text editor → Source view (the <> button).
+  Do NOT paste this comment.
+
+  This is the AIDED TRAINING phase of the PCP data-literacy study — the
+  productivity measure (RQ2). The participant works the 8 block:"practice"
+  PCP items (2 per Bloom level, in two sets) using the DuckDuckGo web
+  search panel. No `arm` parameter — SEARCH is the search-only control
+  and has no Socratic/Unrestricted variants.
+
+  Piped-text expressions:
+    ${e://Field/ResponseID}  → Qualtrics' unique response id (embed `pid`).
+
+  embed-pcp.html hardcodes PHASE='vlattrain' and loads the practice-block
+  PCP items itself; no phase= or set= params are needed. English-only.
+
+  Companion JS: paste qualtrics-pcp-train-js.js into this question's
+  "Add JavaScript" panel (NOT qualtrics-question-js.js, and NOT the
+  VLAT/CR bridges — fields would be mis-namespaced or skipped).
+  ====================================================================
+-->
+<iframe
+  src="https://bruno20033.github.io/thesis-rct/embed-pcp.html?condition=SEARCH&pid=${e://Field/ResponseID}"
+  width="100%"
+  height="800"
+  frameborder="0"
+  style="border:none; display:block; width:100%; min-height:700px;"
+  allow="clipboard-write"
+  title="Research tools — SEARCH condition (PCP aided training)">
+</iframe>
