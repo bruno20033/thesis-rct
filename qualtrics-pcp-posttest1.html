@@ -120,7 +120,20 @@
   function seededRandom(seed) { var x = Math.sin(seed++) * 10000; return x - Math.floor(x); }
   function hashString(str) { var h = 0; for (var i = 0; i < str.length; i++) { h = ((h << 5) - h) + str.charCodeAt(i); h |= 0; } return Math.abs(h); }
   function shuffleArray(arr, seed) { var a = arr.slice(); for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(seededRandom(seed + i) * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; } return a; }
-  items = shuffleArray(items, hashString(pid + '_' + BLOCK));
+  // Stratified interleave by Bloom level so the four levels are spread across the
+  // block (no run of same-type items, e.g. three "Is this a PCP?" in a row). Order
+  // within each level and the level rotation is shuffled per pid (counterbalanced).
+  function stratifiedOrder(arr, seed) {
+    var groups = {}, blooms = [];
+    arr.forEach(function (it) { var b = it.bloom || 'x'; if (!groups[b]) { groups[b] = []; blooms.push(b); } groups[b].push(it); });
+    blooms = shuffleArray(blooms, seed);
+    blooms.forEach(function (b, k) { groups[b] = shuffleArray(groups[b], seed + 100 + k); });
+    var out = [], maxLen = 0;
+    blooms.forEach(function (b) { if (groups[b].length > maxLen) maxLen = groups[b].length; });
+    for (var r = 0; r < maxLen; r++) blooms.forEach(function (b) { if (groups[b][r]) out.push(groups[b][r]); });
+    return out;
+  }
+  items = stratifiedOrder(items, hashString(pid + '_' + BLOCK));
   var itemOrder = items.map(function (i) { return i.id; });
 
   // ── State ──
@@ -152,7 +165,8 @@
     elCurrent.textContent = String(currentIndex + 1);
     elProgressFill.style.width = ((currentIndex / items.length) * 100) + '%';
 
-    // Chart (chart-only image; alt = chart type)
+    // Chart image (axis titles + chart; prompt & options cropped off — the prompt is
+    // shown as separate text below). alt = chart type.
     var alt = item.chartType || 'chart';
     var imgPath = 'charts/' + item.chartId + '.png';
     elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escAttr(alt) + '" ' +
