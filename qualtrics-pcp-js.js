@@ -20,7 +20,7 @@
  * ==================================================================== */
 Qualtrics.SurveyEngine.addOnReady(function () {
   var qThis = this;
-  var POSTTEST_FIELD = 'vlat_post_responses';   // existing declared field reused for the array
+  var POSTTEST_FIELD = 'post_test_1_q';   // existing declared field the post-test array is saved to
 
   qThis.hideNextButton();
 
