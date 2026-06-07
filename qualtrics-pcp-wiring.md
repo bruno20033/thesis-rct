@@ -46,26 +46,28 @@ platform (Prolific longitudinal re-invite vs email), interval (e.g. 7 days),
 reminder schedule, attrition handling. The `qualtrics-pcp-posttest2.html` renderer
 itself is ready and identical in behaviour to posttest 1.
 
-## Embedded Data to declare (Survey Flow → Embedded Data block)
+## Embedded Data — one field per phase (reuses existing fields)
 
-Undeclared fields are dropped silently. Identity (`condition`, `participant_id`,
-`arm`) is set by the Randomizer.
+The consolidated design writes the **whole phase into a single existing field**, so
+there is **nothing new to declare**. Identity (`condition`, `participant_id`, `arm`)
+is set by the Randomizer.
 
-**Post-tests** — per item `<id>_response`, `<id>_rt`, `<id>_timeout` (id already
-includes the `pcp_` prefix), plus 7 block fields each.
+| Phase | Field (reused) | Holds |
+|---|---|---|
+| Aided practice | `vlat_train_responses` | JSON array, one dict per practice question: `{id, raw_id, chart_id, chart_type, format, answer, time_ms, interaction}`. `interaction` = `{mode:"llm", turns:[{prompt,response,response_latency_ms,judge}]}` (judge `null` on Unrestricted) **or** `{mode:"search", searches:[{query, clicks:[{title,url,index,dwell_ms,fallback_clicked}]}]}`. Built by `pcp_consolidate.js` inside the embed. |
+| Immediate / delayed post-test | `vlat_post_responses` | JSON array, one dict per item: `{id, chart_id, format, answer, rt_ms, timeout}`. Immediate and delayed live in separate surveys, so each uses its own copy of the field. |
 
-- Immediate (16): `pcp_rem_sa_1..4`, `pcp_und_sa_1..4`, `pcp_ana_sa_1`, `pcp_ana_sa_2`, `pcp_ana_sa_3`, `pcp_ana_sa_9`, `pcp_eval_sa_1..4`
-- Delayed (16): `pcp_rem_sa_5..8`, `pcp_und_sa_5..8`, `pcp_ana_sa_5..8`, `pcp_eval_sa_5..8`
-- Block fields (× posttest1, posttest2): `pcp_<block>_completed`, `_total_time`, `_items_answered`, `_attempted`, `_order`, `_total`, `_responses`
-
-**Aided practice** — the full `pcp_train_*` field list (interaction log, per-turn
-chat/search/judge fields, and `pcp_train_<id>_answer/_chart/_format/_slot/_time`
-for the 8 practice ids) is documented in the header of `qualtrics-pcp-train-js.js`.
+The field names are constants at the top of the bridges (`TRAIN_FIELD`,
+`POSTTEST_FIELD`) — edit there to point at differently-named existing fields. No
+answer key ships to the browser; correctness is scored offline by `pcp_score.js`
+(`scoreResponses`) against `PCP_KEY`. The full raw InteractionLog is also backed up
+server-side by the embed (Cloudflare `/log`), so the single field is the
+analysis-facing record.
 
 ## Verified
 
-The post-test renderer was smoke-tested in a browser (16 items load, chart +
-options render, selection→advance→completion works, ED fields correctly named
-`pcp_<id>_response/_rt/_timeout` + 7 block fields, no console errors). The aided
-`embed-pcp.html` practice flow still needs an end-to-end pilot check with the
-Cloudflare Worker live (P3).
+`pcp_consolidate.js` (transform) and `pcp_score.js` (scorer) are unit-tested —
+`node test_consolidate.js` → 26 pass; `node pcp_score.js --test` → 25 pass — across
+all three arms including the Socratic active-regen path. The post-test renderer was
+browser smoke-tested. The aided `embed-pcp.html` flow still needs an end-to-end
+pilot check with the Cloudflare Worker live.

@@ -329,6 +329,7 @@
 <!-- VLAT item bank (Kim, Lee & Kwon 2017). This engine serves the 9
      practice-block items as the aided 3-arm training phase. -->
 <script src="pcp_items_data.js"></script>
+<script src="pcp_consolidate.js"></script>
 <script>
 (function () {
   'use strict';
@@ -1001,6 +1002,14 @@
       payload.vlat_answered  = vs.answered;
       payload.vlat_attempted = vs.attempted;
       payload.vlat_items     = vs.items;
+      // Per-question consolidated array: each item's answer + that question's
+      // interaction trace (LLM turns+judge / SEARCH queries+clicks), built by
+      // the canonical pcp_consolidate.js transform. The Qualtrics bridge writes
+      // this to ONE Embedded Data field. Guarded: if the module didn't load,
+      // the raw log + vlat_items still ship, so no data is lost.
+      if (window.PCP_CONSOLIDATE) {
+        payload.vlat_consolidated = window.PCP_CONSOLIDATE.consolidate(log.events, vs.items, CONDITION);
+      }
     }
     // Attach CR scoring data so Qualtrics bridge can flatten to Embedded Data
     if (IS_CR_MODE) {

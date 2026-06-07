@@ -230,7 +230,7 @@
     var item = items[currentIndex];
     var rt = Date.now() - itemStartTime;
     var optionTexts = item.options.map(function (o) { return o.text; });
-    responses.push({ itemId: item.id, response: response, rt: rt, timeout: isTimeout, questionText: item.questionText, options: optionTexts });
+    responses.push({ itemId: item.id, response: response, rt: rt, timeout: isTimeout, chart_id: item.chartId, format: (item.questionFormat || 'mc'), questionText: item.questionText, options: optionTexts });
     post({ type: 'pcp_item_response', itemId: item.id, response: response, rt: rt, timeout: isTimeout, questionText: item.questionText, options: optionTexts });
     currentIndex++;
     if (currentIndex < items.length) renderItem(); else finishBlock();
@@ -259,7 +259,7 @@
     ed['pcp_' + BLOCK + '_order'] = itemOrder.join(',');
     ed['pcp_' + BLOCK + '_total'] = String(items.length);
     // Authoritative blob for offline scoring (robust to shuffle): id + chosen label per item.
-    ed['pcp_' + BLOCK + '_responses'] = JSON.stringify(responses.map(function (r) { return { id: r.itemId, answer: r.response, rt: r.rt, timeout: r.timeout }; }));
+    ed['pcp_' + BLOCK + '_responses'] = JSON.stringify(responses.map(function (r) { return { id: r.itemId, chart_id: r.chart_id, format: r.format, answer: r.response, rt_ms: r.rt, timeout: r.timeout }; }));
 
     post({ type: 'pcp_block_complete', block: BLOCK, total: items.length, itemsAnswered: answered,
            attempted: attempted, totalTime: totalTime, order: itemOrder, embeddedData: ed });
