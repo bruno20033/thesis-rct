@@ -1,0 +1,455 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PCP answer-key verification worksheet</title><style>
+*{box-sizing:border-box} body{margin:0;font:15px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;color:#1a1a2e;background:#f4f5f7}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #dde;padding:10px 18px;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+header h1{font-size:1.05rem;margin:0 0 6px} nav a{margin-right:14px;text-decoration:none;color:#1c64d8;font-weight:600} nav small{color:#888;font-weight:400}
+.wrap{max-width:1500px;margin:0 auto;padding:18px}
+.intro,.flag{background:#fff;border:1px solid #e3e6ee;border-radius:10px;padding:14px 16px;margin-bottom:16px}
+.intro h3,.flag h3{margin:0 0 8px;font-size:.95rem} .intro ol{margin:6px 0 0 18px} .intro li{margin:3px 0}
+.flag{border-left:4px solid #f59f00} .flag a{display:inline-block;margin:3px 10px 3px 0;text-decoration:none;color:#b54708;font-weight:600} .flag em{color:#888;font-weight:400;font-style:normal}
+h2{margin:26px 0 12px;font-size:1.15rem;border-bottom:2px solid #dde;padding-bottom:6px} h2 small{color:#888;font-weight:400;font-size:.85rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px}
+.card{background:#fff;border:1px solid #e3e6ee;border-radius:10px;padding:12px;display:flex;flex-direction:column}
+.card.flagged{border-left:4px solid #f59f00}
+.head{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:8px}
+.name{font:700 1rem ui-monospace,Menlo,monospace;color:#0b3d91;cursor:pointer} .name:hover{text-decoration:underline}
+.src{font:600 .78rem ui-monospace,monospace;color:#666;background:#eef1f6;padding:2px 6px;border-radius:5px}
+.badge{font-size:.7rem;font-weight:700;padding:2px 7px;border-radius:10px}
+.train{background:#e7f5ff;color:#1971c2}.imm{background:#ebfbee;color:#2b8a3e}.del{background:#fff4e6;color:#e8590c}
+.c-HIGH{background:#ebfbee;color:#2b8a3e}.c-MED{background:#fff3bf;color:#a37b00}.c-LOW{background:#ffe3e3;color:#c92a2a}
+.chart{width:100%;border:1px solid #dee2e6;border-radius:7px;background:#fff}
+.q{font-weight:600;margin:10px 0 6px}
+.opts{margin:0;padding-left:22px} .opts li{margin:3px 0}
+.opt.key{background:#d3f9d8;border-radius:5px;padding:2px 6px;margin-left:-6px}
+.opt.omit{color:#868e96}
+.tag{font-size:.68rem;font-weight:700;padding:1px 6px;border-radius:8px} .tk{background:#2b8a3e;color:#fff} .to{background:#ced4da;color:#495057}
+.rec{margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;border-top:1px dashed #dde;padding-top:8px}
+.cur b{color:#0b3d91} .live{padding:5px 8px;border:1px solid #ccd;border-radius:6px;width:150px}
+.st{font-weight:700} .st.ok{color:#2b8a3e} .st.no{color:#c92a2a}
+@media print{header{position:static}.grid{grid-template-columns:1fr 1fr}.card{break-inside:avoid}.live{border:1px solid #999}}
+</style></head><body>
+<header><h1>PCP / BTPL answer-key verification worksheet <small style="font-weight:400;color:#888">— 40 items</small></h1><nav><a href="#sec-remember">Remember <small>(10)</small></a><a href="#sec-understand">Understand <small>(10)</small></a><a href="#sec-analyze">Analyze <small>(10)</small></a><a href="#sec-evaluate">Evaluate <small>(10)</small></a></nav></header>
+<div class="wrap">
+<div class="intro"><h3>How to use this with the live quiz</h3>
+<ol>
+<li>Open the live quiz for a module (e.g. Understand: <code>usfca.qualtrics.com/jfe/form/SV_0TEScrqyom6gKzA</code>). Answer each question and submit — it shows the <b style="color:#2b8a3e">correct answer in green</b>.</li>
+<li>Match the quiz's chart to the card below with the <b>same chart</b> (cards are grouped by module in the quiz's source order; the <code>src · Q#</code> tag = the upstream question number).</li>
+<li>That card's <b>name</b> is your item id, and <b>“key X / ✓ current key”</b> is what we currently have. Type the green answer's <b>letter</b> (or text) into <b>“live quiz says…”</b>: it turns <span style="color:#2b8a3e">green ✓</span> if it matches our key, <span style="color:#c92a2a">red ✗</span> if not. Your entries auto-save in this browser.</li>
+<li>Charts here are the same chart-only crops shown to participants, so they should match the quiz exactly. Prioritise the flagged items below.</li>
+</ol></div>
+<div class="flag"><h3>⚠️ Check these 6 first (MED / LOW confidence)</h3><a href="#pcp_eval_sa_3">pcp_eval_sa_3 <em>(LOW, key A)</em></a><a href="#pcp_ana_sa_2">pcp_ana_sa_2 <em>(MED, key B)</em></a><a href="#pcp_ana_sa_9">pcp_ana_sa_9 <em>(MED, key C)</em></a><a href="#pcp_eval_sa_4">pcp_eval_sa_4 <em>(MED, key A)</em></a><a href="#pcp_ana_sa_7">pcp_ana_sa_7 <em>(MED, key B)</em></a><a href="#pcp_eval_sa_5">pcp_eval_sa_5 <em>(MED, key D)</em></a></div>
+<section id="sec-remember"><h2>Remember <small>— 10 items</small></h2><div class="grid"><div class="card" id="pcp_rem_fa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_fa_1',this)" title="click to copy">pcp_rem_fa_1</span>
+    <span class="src">Remember-FA · Q1</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_fa_1.png" alt="pcp_rem_fa_1 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> Yes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> No</li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_rem_fa_1" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_fa_1"></span></div>
+</div><div class="card" id="pcp_rem_fa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_fa_2',this)" title="click to copy">pcp_rem_fa_2</span>
+    <span class="src">Remember-FA · Q2</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_fa_2.png" alt="pcp_rem_fa_2 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> Yes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> No</li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_rem_fa_2" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_fa_2"></span></div>
+</div><div class="card" id="pcp_rem_sa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_1',this)" title="click to copy">pcp_rem_sa_1</span>
+    <span class="src">Remember-SA · Q1</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_1.png" alt="pcp_rem_sa_1 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> Yes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> No</li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_rem_sa_1" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_1"></span></div>
+</div><div class="card" id="pcp_rem_sa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_2',this)" title="click to copy">pcp_rem_sa_2</span>
+    <span class="src">Remember-SA · Q2</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_2.png" alt="pcp_rem_sa_2 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> Yes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> No</li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_rem_sa_2" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_2"></span></div>
+</div><div class="card" id="pcp_rem_sa_3">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_3',this)" title="click to copy">pcp_rem_sa_3</span>
+    <span class="src">Remember-SA · Q3</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_3.png" alt="pcp_rem_sa_3 chart">
+  <div class="q">Which of the following is an example of a parallel coordinates chart?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> A</li><li class="opt"><b>B)</b> B</li><li class="opt key"><b>C)</b> C <span class="tag tk">✓ current key</span></li><li class="opt"><b>D)</b> D</li><li class="opt"><b>E)</b> E</li><li class="opt"><b>F)</b> None of the above</li><li class="opt omit"><b>G)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>C</b></span>
+    <input class="live" data-id="pcp_rem_sa_3" data-key="C" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_3"></span></div>
+</div><div class="card" id="pcp_rem_sa_4">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_4',this)" title="click to copy">pcp_rem_sa_4</span>
+    <span class="src">Remember-SA · Q4</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_4.png" alt="pcp_rem_sa_4 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> Yes</li><li class="opt key"><b>B)</b> No <span class="tag tk">✓ current key</span></li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_rem_sa_4" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_4"></span></div>
+</div><div class="card" id="pcp_rem_sa_5">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_5',this)" title="click to copy">pcp_rem_sa_5</span>
+    <span class="src">Remember-SA · Q5</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_5.png" alt="pcp_rem_sa_5 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> Yes</li><li class="opt key"><b>B)</b> No <span class="tag tk">✓ current key</span></li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_rem_sa_5" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_5"></span></div>
+</div><div class="card" id="pcp_rem_sa_6">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_6',this)" title="click to copy">pcp_rem_sa_6</span>
+    <span class="src">Remember-SA · Q6</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_6.png" alt="pcp_rem_sa_6 chart">
+  <div class="q">Which of the following is an example of a parallel coordinates chart?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> A</li><li class="opt"><b>B)</b> B</li><li class="opt key"><b>C)</b> C <span class="tag tk">✓ current key</span></li><li class="opt"><b>D)</b> D</li><li class="opt"><b>E)</b> E</li><li class="opt"><b>F)</b> None of the above</li><li class="opt omit"><b>G)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>C</b></span>
+    <input class="live" data-id="pcp_rem_sa_6" data-key="C" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_6"></span></div>
+</div><div class="card" id="pcp_rem_sa_7">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_7',this)" title="click to copy">pcp_rem_sa_7</span>
+    <span class="src">Remember-SA · Q8</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_7.png" alt="pcp_rem_sa_7 chart">
+  <div class="q">Which of the following is an example of a parallel coordinates chart?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> A</li><li class="opt key"><b>B)</b> B <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> C</li><li class="opt"><b>D)</b> D</li><li class="opt"><b>E)</b> E</li><li class="opt"><b>F)</b> None of the above</li><li class="opt omit"><b>G)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_rem_sa_7" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_7"></span></div>
+</div><div class="card" id="pcp_rem_sa_8">
+  <div class="head"><span class="name" onclick="cp('pcp_rem_sa_8',this)" title="click to copy">pcp_rem_sa_8</span>
+    <span class="src">Remember-SA · Q9</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_rem_sa_8.png" alt="pcp_rem_sa_8 chart">
+  <div class="q">Is this an example of a parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> Yes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> No</li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_rem_sa_8" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_rem_sa_8"></span></div>
+</div></div></section><section id="sec-understand"><h2>Understand <small>— 10 items</small></h2><div class="grid"><div class="card" id="pcp_und_fa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_und_fa_1',this)" title="click to copy">pcp_und_fa_1</span>
+    <span class="src">Understand-FA · Q1</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_fa_1.png" alt="pcp_und_fa_1 chart">
+  <div class="q">What would you say is the difference between the following two charts (a) and (b)?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> They both look the same</li><li class="opt key"><b>B)</b> The carbohydrate(g) axis is flipped <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> The fat(g) axis is flipped</li><li class="opt omit"><b>D)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_fa_1" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_fa_1"></span></div>
+</div><div class="card" id="pcp_und_fa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_und_fa_2',this)" title="click to copy">pcp_und_fa_2</span>
+    <span class="src">Understand-FA · Q2</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_fa_2.png" alt="pcp_und_fa_2 chart">
+  <div class="q">What would you say is the difference between the following two charts (a) and (b)?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> They both look the same</li><li class="opt key"><b>B)</b> The Malaria cases (%) and the Poverty Rate axes have been reordered <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> The Fever or Malaria cases (%) and Poverty Rate axes have been reordered</li><li class="opt omit"><b>D)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_fa_2" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_fa_2"></span></div>
+</div><div class="card" id="pcp_und_sa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_1',this)" title="click to copy">pcp_und_sa_1</span>
+    <span class="src">Understand-SA · Q1</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_1.png" alt="pcp_und_sa_1 chart">
+  <div class="q">What would you say is the difference between the following two charts (a) and (b)?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> They both look the same</li><li class="opt key"><b>B)</b> The Income.Per.Capita Axis is flipped <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> The Population.Population Per Square Mile Axis is flipped</li><li class="opt omit"><b>D)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_sa_1" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_1"></span></div>
+</div><div class="card" id="pcp_und_sa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_2',this)" title="click to copy">pcp_und_sa_2</span>
+    <span class="src">Understand-SA · Q2</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_2.png" alt="pcp_und_sa_2 chart">
+  <div class="q">What would you say is the difference between the following two charts (a) and (b)?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> They both look the same</li><li class="opt key"><b>B)</b> The water(g) and the fiber(g) axes have been reordered <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> The calcium(g) and the monounsat(g) axes have been reordered</li><li class="opt omit"><b>D)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_sa_2" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_2"></span></div>
+</div><div class="card" id="pcp_und_sa_3">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_3',this)" title="click to copy">pcp_und_sa_3</span>
+    <span class="src">Understand-SA · Q3</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_3.png" alt="pcp_und_sa_3 chart">
+  <div class="q">What are the minimum and maximum values of the &quot;Deaths&quot; attribute in the dataset shown using a parallel coordinates chart below?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> 0 and 13</li><li class="opt"><b>B)</b> 0 and 365</li><li class="opt"><b>C)</b> 0 and 826</li><li class="opt key"><b>D)</b> 9 and 344 <span class="tag tk">✓ current key</span></li><li class="opt"><b>E)</b> 1850 and 1962</li><li class="opt omit"><b>F)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>D</b></span>
+    <input class="live" data-id="pcp_und_sa_3" data-key="D" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_3"></span></div>
+</div><div class="card" id="pcp_und_sa_4">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_4',this)" title="click to copy">pcp_und_sa_4</span>
+    <span class="src">Understand-SA · Q4</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_4.png" alt="pcp_und_sa_4 chart">
+  <div class="q">For this region/county in the United States, what is the range of values for the Income.Per Capita for the data element selected (highlighted in dark blue)?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> Between 10,000 to 20,000</li><li class="opt key"><b>B)</b> Between 20,000 to 30,000 <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> Between 30,000 to 40,000</li><li class="opt"><b>D)</b> Between 40,000 to 50,000</li><li class="opt"><b>E)</b> Between 50,000 to 60,000</li><li class="opt omit"><b>F)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_sa_4" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_4"></span></div>
+</div><div class="card" id="pcp_und_sa_5">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_5',this)" title="click to copy">pcp_und_sa_5</span>
+    <span class="src">Understand-SA · Q5</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_5.png" alt="pcp_und_sa_5 chart">
+  <div class="q">What are the minimum and maximum values of the &quot;val_auc&quot; attribute in the dataset shown using a parallel coordinates chart below?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> 0.00001, 0.001</li><li class="opt key"><b>B)</b> -0.7887, -0.69216 <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> 0, 0.5</li><li class="opt omit"><b>D)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_sa_5" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_5"></span></div>
+</div><div class="card" id="pcp_und_sa_6">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_6',this)" title="click to copy">pcp_und_sa_6</span>
+    <span class="src">Understand-SA · Q6</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_6.png" alt="pcp_und_sa_6 chart">
+  <div class="q">What are the minimum and maximum values of the &quot;protein&quot; attribute in the dataset shown using a parallel coordinates chart below?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> 1.0 and 6.0 <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> 50 and 160</li><li class="opt"><b>C)</b> 0 and 5.0</li><li class="opt"><b>D)</b> 0 and 350</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_und_sa_6" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_6"></span></div>
+</div><div class="card" id="pcp_und_sa_7">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_7',this)" title="click to copy">pcp_und_sa_7</span>
+    <span class="src">Understand-SA · Q7</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_7.png" alt="pcp_und_sa_7 chart">
+  <div class="q">For the following parallel coordinates plot, which axis ranges from 0:06 - 00:11?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> Training time</li><li class="opt"><b>B)</b> Miles for training run</li><li class="opt key"><b>C)</b> Running pace per mile <span class="tag tk">✓ current key</span></li><li class="opt"><b>D)</b> Shoe brand</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>C</b></span>
+    <input class="live" data-id="pcp_und_sa_7" data-key="C" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_7"></span></div>
+</div><div class="card" id="pcp_und_sa_8">
+  <div class="head"><span class="name" onclick="cp('pcp_und_sa_8',this)" title="click to copy">pcp_und_sa_8</span>
+    <span class="src">Understand-SA · Q8</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_und_sa_8.png" alt="pcp_und_sa_8 chart">
+  <div class="q">Which university has the lowest average faculty salary and one of the highest median debt for students attending that university?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> Marion Military Institute</li><li class="opt key"><b>B)</b> Judson College <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> Huntingdon College</li><li class="opt"><b>D)</b> University of West Alabama</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_und_sa_8" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_und_sa_8"></span></div>
+</div></div></section><section id="sec-analyze"><h2>Analyze <small>— 10 items</small></h2><div class="grid"><div class="card" id="pcp_ana_fa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_fa_1',this)" title="click to copy">pcp_ana_fa_1</span>
+    <span class="src">Analyze-FA · Q1</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_fa_1.png" alt="pcp_ana_fa_1 chart">
+  <div class="q">Which of the following charts is the best at answering the question examining the relationship of &quot;Home ownership rate&quot; and the &quot;number of households&quot; in this dataset?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> A</li><li class="opt"><b>B)</b> B</li><li class="opt"><b>C)</b> C</li><li class="opt key"><b>D)</b> D <span class="tag tk">✓ current key</span></li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>D</b></span>
+    <input class="live" data-id="pcp_ana_fa_1" data-key="D" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_fa_1"></span></div>
+</div><div class="card" id="pcp_ana_fa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_fa_2',this)" title="click to copy">pcp_ana_fa_2</span>
+    <span class="src">Analyze-FA · Q2</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_fa_2.png" alt="pcp_ana_fa_2 chart">
+  <div class="q">Which of the scatterplot images is encoded in the following parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> A</li><li class="opt key"><b>B)</b> B <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> C</li><li class="opt"><b>D)</b> D</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_ana_fa_2" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_fa_2"></span></div>
+</div><div class="card" id="pcp_ana_sa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_1',this)" title="click to copy">pcp_ana_sa_1</span>
+    <span class="src">Analyze-SA · Q1</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_1.png" alt="pcp_ana_sa_1 chart">
+  <div class="q">Which of the following charts is the best to answer a question examining the relationship between &quot;Displacement&quot; and &quot;Weight in Lbs&quot; when exploring data about cars?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> A</li><li class="opt key"><b>B)</b> B <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> C</li><li class="opt"><b>D)</b> D</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_ana_sa_1" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_1"></span></div>
+</div><div class="card flagged" id="pcp_ana_sa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_2',this)" title="click to copy">pcp_ana_sa_2</span>
+    <span class="src">Analyze-SA · Q2</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-MED">MED</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_2.png" alt="pcp_ana_sa_2 chart">
+  <div class="q">Sort the following parallel coordinates charts in descending order based on the &quot;AverageCost&quot; to attend the university.</div>
+  <ol class="opts"><li class="opt"><b>A)</b> C&gt;D&gt;A&gt;B</li><li class="opt key"><b>B)</b> C&gt;B&gt;A&gt;D <span class="tag tk">✓ current key</span></li><li class="opt"><b>C)</b> B&gt;D&gt;A&gt;C</li><li class="opt"><b>D)</b> D&gt;A&gt;C&gt;B</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_ana_sa_2" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_2"></span></div>
+</div><div class="card" id="pcp_ana_sa_3">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_3',this)" title="click to copy">pcp_ana_sa_3</span>
+    <span class="src">Analyze-SA · Q3</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_3.png" alt="pcp_ana_sa_3 chart">
+  <div class="q">Which of the following scatterplot images is encoded in the following parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> A <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> B</li><li class="opt"><b>C)</b> C</li><li class="opt"><b>D)</b> D</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_ana_sa_3" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_3"></span></div>
+</div><div class="card" id="pcp_ana_sa_5">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_5',this)" title="click to copy">pcp_ana_sa_5</span>
+    <span class="src">Analyze-SA · Q5</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_5.png" alt="pcp_ana_sa_5 chart">
+  <div class="q">In the parallel coordinates plot below, what is the correlation between the SATAverage score and the AdmissionRate?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> They are positively correlated</li><li class="opt key"><b>B)</b> They are negatively correlated <span class="tag tk">✓ current key</span></li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_ana_sa_5" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_5"></span></div>
+</div><div class="card" id="pcp_ana_sa_6">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_6',this)" title="click to copy">pcp_ana_sa_6</span>
+    <span class="src">Analyze-SA · Q6</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_6.png" alt="pcp_ana_sa_6 chart">
+  <div class="q">In this parallel coordinates plot, what is the correlation between Year and TotalPopulation?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> They are positively correlated <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> They are negatively correlated</li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_ana_sa_6" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_6"></span></div>
+</div><div class="card flagged" id="pcp_ana_sa_7">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_7',this)" title="click to copy">pcp_ana_sa_7</span>
+    <span class="src">Analyze-SA · Q7</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-MED">MED</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_7.png" alt="pcp_ana_sa_7 chart">
+  <div class="q">In the parallel coordinates plot below, what is the correlation between the fat(g) and the carbohydrate (g)?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> They are positively correlated</li><li class="opt key"><b>B)</b> They are negatively correlated <span class="tag tk">✓ current key</span></li><li class="opt omit"><b>C)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>B</b></span>
+    <input class="live" data-id="pcp_ana_sa_7" data-key="B" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_7"></span></div>
+</div><div class="card" id="pcp_ana_sa_8">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_8',this)" title="click to copy">pcp_ana_sa_8</span>
+    <span class="src">Analyze-SA · Q8</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_8.png" alt="pcp_ana_sa_8 chart">
+  <div class="q">We get the following chart on using filtering to remove rows with Median Family Income less than 100,000. What can we say about the Average Cost of the colleges that the students from those households go to?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> Students from high Median Family Income families go to colleges that have a high Average Cost <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> Students from high Median Family Income families go to colleges that have a low Average Cost</li><li class="opt"><b>C)</b> Students from high Median Family Income families have a high Median Debt (greater than 30,000)</li><li class="opt omit"><b>D)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_ana_sa_8" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_8"></span></div>
+</div><div class="card flagged" id="pcp_ana_sa_9">
+  <div class="head"><span class="name" onclick="cp('pcp_ana_sa_9',this)" title="click to copy">pcp_ana_sa_9</span>
+    <span class="src">Analyze-SA · Q9</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-MED">MED</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_ana_sa_9.png" alt="pcp_ana_sa_9 chart">
+  <div class="q">In this parallel coordinates plot of a cars dataset, the user has selected only the cars that have displacement above 400. Based on reading this chart, what would you say is the range for the HP (Horsepower) of these cars?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> (150, 250)</li><li class="opt"><b>B)</b> (150, 300)</li><li class="opt key"><b>C)</b> (175, 230) <span class="tag tk">✓ current key</span></li><li class="opt"><b>D)</b> (200, 250)</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>C</b></span>
+    <input class="live" data-id="pcp_ana_sa_9" data-key="C" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_ana_sa_9"></span></div>
+</div></div></section><section id="sec-evaluate"><h2>Evaluate <small>— 10 items</small></h2><div class="grid"><div class="card" id="pcp_eval_fa_10">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_fa_10',this)" title="click to copy">pcp_eval_fa_10</span>
+    <span class="src">Evaluate-FA · Q10</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_fa_10.png" alt="pcp_eval_fa_10 chart">
+  <div class="q">What is wrong with this chart?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The color legend is not properly labeled <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The axis titles are missing</li><li class="opt"><b>C)</b> There is no data on the chart</li><li class="opt"><b>D)</b> There is nothing wrong with this chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_fa_10" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_fa_10"></span></div>
+</div><div class="card" id="pcp_eval_fa_11">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_fa_11',this)" title="click to copy">pcp_eval_fa_11</span>
+    <span class="src">Evaluate-FA · Q11</span><span class="badge train">TRAIN (practice)</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_fa_11.png" alt="pcp_eval_fa_11 chart">
+  <div class="q">Name one problem with this chart.</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The color legend has the wrong colors <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The axis titles are missing</li><li class="opt"><b>C)</b> The slopes of the edges is too high</li><li class="opt"><b>D)</b> There is nothing wrong with this chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_fa_11" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_fa_11"></span></div>
+</div><div class="card" id="pcp_eval_sa_1">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_1',this)" title="click to copy">pcp_eval_sa_1</span>
+    <span class="src">Evaluate-SA · Q1</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_1.png" alt="pcp_eval_sa_1 chart">
+  <div class="q">What is wrong with the following parallel coordinates chart?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The chart contains repeated axes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The chart uses too many colors</li><li class="opt"><b>C)</b> The chart does not contain a color legend</li><li class="opt"><b>D)</b> There is nothing wrong with the chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_1" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_1"></span></div>
+</div><div class="card" id="pcp_eval_sa_2">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_2',this)" title="click to copy">pcp_eval_sa_2</span>
+    <span class="src">Evaluate-SA · Q2</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_2.png" alt="pcp_eval_sa_2 chart">
+  <div class="q">What is wrong with the following parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The axis labels are too cluttered and illegible/unreadable <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The chart does not use color</li><li class="opt"><b>C)</b> The axis labels are too small</li><li class="opt"><b>D)</b> The axis labels are the wrong color</li><li class="opt"><b>E)</b> The chart is missing the minimum and maximum values on the axes</li><li class="opt omit"><b>F)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_2" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_2"></span></div>
+</div><div class="card flagged" id="pcp_eval_sa_3">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_3',this)" title="click to copy">pcp_eval_sa_3</span>
+    <span class="src">Evaluate-SA · Q3</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-LOW">LOW</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_3.png" alt="pcp_eval_sa_3 chart">
+  <div class="q">What is wrong with the following parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The axis labels are too small <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The chart does not use color</li><li class="opt"><b>C)</b> The data labels on each axis are too small</li><li class="opt"><b>D)</b> There is nothing wrong with this chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_3" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_3"></span></div>
+</div><div class="card flagged" id="pcp_eval_sa_4">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_4',this)" title="click to copy">pcp_eval_sa_4</span>
+    <span class="src">Evaluate-SA · Q4</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-MED">MED</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_4.png" alt="pcp_eval_sa_4 chart">
+  <div class="q">Name one thing wrong with this chart.</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> There is too much data/clutter on this chart <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The legend is incorrect</li><li class="opt"><b>C)</b> There are too many variables on this chart</li><li class="opt"><b>D)</b> There is nothing wrong with this chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_4" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_4"></span></div>
+</div><div class="card flagged" id="pcp_eval_sa_5">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_5',this)" title="click to copy">pcp_eval_sa_5</span>
+    <span class="src">Evaluate-SA · Q5</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-MED">MED</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_5.png" alt="pcp_eval_sa_5 chart">
+  <div class="q">What is wrong with this chart?</div>
+  <ol class="opts"><li class="opt"><b>A)</b> The color legend is wrong</li><li class="opt"><b>B)</b> There is too much data on the chart</li><li class="opt"><b>C)</b> The slope of the edges is too high</li><li class="opt key"><b>D)</b> There is nothing wrong with this chart <span class="tag tk">✓ current key</span></li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>D</b></span>
+    <input class="live" data-id="pcp_eval_sa_5" data-key="D" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_5"></span></div>
+</div><div class="card" id="pcp_eval_sa_6">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_6',this)" title="click to copy">pcp_eval_sa_6</span>
+    <span class="src">Evaluate-SA · Q6</span><span class="badge imm">TEST · immediate</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_6.png" alt="pcp_eval_sa_6 chart">
+  <div class="q">Find the problem with the following chart.</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The axis labels for one of the axes is not in order <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> There is too much data on this chart</li><li class="opt"><b>C)</b> This chart has too many colors</li><li class="opt"><b>D)</b> There is nothing wrong with the chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_6" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_6"></span></div>
+</div><div class="card" id="pcp_eval_sa_7">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_7',this)" title="click to copy">pcp_eval_sa_7</span>
+    <span class="src">Evaluate-SA · Q7</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_7.png" alt="pcp_eval_sa_7 chart">
+  <div class="q">What is wrong with the following parallel coordinates plot?</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> The chart contains repeated axes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> The chart uses too many colors</li><li class="opt"><b>C)</b> The chart does not contain a color legend</li><li class="opt"><b>D)</b> There is nothing wrong with the chart above</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_7" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_7"></span></div>
+</div><div class="card" id="pcp_eval_sa_8">
+  <div class="head"><span class="name" onclick="cp('pcp_eval_sa_8',this)" title="click to copy">pcp_eval_sa_8</span>
+    <span class="src">Evaluate-SA · Q8</span><span class="badge del">TEST · delayed</span>
+    <span class="badge c-HIGH">HIGH</span></div>
+  <img class="chart" loading="lazy" src="https://bruno20033.github.io/thesis-rct/charts/pcp_eval_sa_8.png" alt="pcp_eval_sa_8 chart">
+  <div class="q">Name one problem with this chart.</div>
+  <ol class="opts"><li class="opt key"><b>A)</b> It has too many axes <span class="tag tk">✓ current key</span></li><li class="opt"><b>B)</b> There is no color legend</li><li class="opt"><b>C)</b> There are too many colors</li><li class="opt"><b>D)</b> There is no problem with this chart</li><li class="opt omit"><b>E)</b> I don't know <span class="tag to">“I don’t know”</span></li></ol>
+  <div class="rec"><span class="cur">key&nbsp;<b>A</b></span>
+    <input class="live" data-id="pcp_eval_sa_8" data-key="A" placeholder="live quiz says…">
+    <span class="st" id="st-pcp_eval_sa_8"></span></div>
+</div></div></section>
+</div>
+<script>
+function cp(t,el){navigator.clipboard&&navigator.clipboard.writeText(t);el.textContent=t+' ✓';setTimeout(()=>el.textContent=t,800);}
+function norm(v){return (v||'').trim().toUpperCase();}
+document.querySelectorAll('.live').forEach(inp=>{
+  const id=inp.dataset.id,key=inp.dataset.key,st=document.getElementById('st-'+id),LS='pcpws_'+id;
+  inp.value=localStorage.getItem(LS)||'';
+  function upd(){const v=norm(inp.value);localStorage.setItem(LS,inp.value);
+    if(!v){st.textContent='';st.className='st';return;}
+    if(v===norm(key)){st.textContent='✓ matches';st.className='st ok';}
+    else{st.textContent='✗ ≠ key '+key;st.className='st no';}}
+  inp.addEventListener('input',upd);upd();
+});
+</script></body></html>
