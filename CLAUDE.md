@@ -10,7 +10,7 @@ The hypothesis is **cognitive offloading**: when participants delegate the reaso
 
 | Arm | Purpose | URL params | Treatment |
 |---|---|---|---|
-| **SEARCH** | Active control | `?condition=SEARCH` | Real DuckDuckGo web search panel. No LLM. |
+| **SEARCH** | Active control | `?condition=SEARCH` | Real Google web search panel (Serper.dev API). No LLM. |
 | **LLM-Socratic** | Scaffolded LLM | `?condition=LLM&arm=socratic` | Probe-only system prompt; never reveals answer. Every turn judged by a second LLM for Socratic fidelity. |
 | **LLM-Unrestricted** | Unscaffolded LLM | `?condition=LLM&arm=unrestricted` | Generally-helpful system prompt. May answer directly. No Judge layer. |
 
@@ -70,7 +70,7 @@ These were confirmed from `embed.html` source inspection (May 2025):
             │  ...workers.dev (env: bruno-kneffel)         │
             │                                              │
             │  POST /llm    → OpenRouter (generator key)   │
-            │  POST /search → DuckDuckGo HTML scrape       │
+            │  POST /search → Google search (Serper.dev)   │
             │  POST /judge  → OpenRouter (Judge key)       │
             └──────────────────────────────────────────────┘
 ```
@@ -151,10 +151,11 @@ Worker name: **`thesis-llm-proxy`** (account: bruno-kneffel). URL: `https://thes
 | `OPENROUTER_API_KEY` | Secret | Generator key (used by `/llm`). |
 | `OPENROUTER_JUDGE_API_KEY` | Secret | Separate Judge key (used by `/judge`). Falls back to `OPENROUTER_API_KEY` if unset, but a separate key is strongly recommended so spend on the participant-facing channel and the Judge channel can be tracked independently. |
 | `ALLOWED_ORIGINS` | Text | Comma-separated. Currently: `https://bruno20033.github.io,https://oii.eu.qualtrics.com`. Add other Qualtrics datacentre origins if the survey is moved. |
+| `SERPER_API_KEY` | Secret | Serper.dev API key used by `/search` for Google results. **Required** for the SEARCH arm. Get one at [serper.dev](https://serper.dev). |
 | `MAX_TOKENS` | Text (optional) | Hard cap on `/llm` `max_tokens`, default 1024. |
 | `JUDGE_MAX_TOKENS` | Text (optional) | Hard cap on `/judge` `max_tokens`, default 400. |
 | `HTTP_REFERER`, `X_TITLE` | Text (optional) | OpenRouter attribution headers. |
-| `SEARCH_NUM_RESULTS`, `SEARCH_REGION`, `SEARCH_SAFESEARCH` | Text (optional) | DuckDuckGo tuning; defaults are fine. |
+| `SEARCH_NUM_RESULTS`, `SEARCH_GL`, `SEARCH_HL` | Text (optional) | Serper/Google result tuning (result count, country, language); defaults are fine. |
 
 The Worker enforces the Origin allowlist on every request and returns `403 Forbidden origin` for anything off-list.
 
@@ -177,7 +178,7 @@ These are the recurring traps. If you hit one of them, the fix below is almost a
 
 - **`403 Forbidden origin`.** The browser's Origin header isn't in `ALLOWED_ORIGINS`. Add it to the env var (no redeploy needed). Common culprits: a different Qualtrics datacentre subdomain (`*.qualtrics.com` is locked per-tenant), or a local-test origin like `http://localhost:8765`.
 - **`User not found` or `401` from OpenRouter.** The key in the Worker secret doesn't match an active key on OpenRouter. Regenerate the key on OpenRouter and paste the new value into the Worker secret.
-- **`429 DuckDuckGo rate-limit/anomaly check`.** DDG served their bot-challenge page. Wait 1–2 min and retry. For real trial scale (a few hundred queries/day) this is rare; if it becomes systemic, switch the SEARCH backend to Brave (needs a billing card) or self-hosted SearXNG.
+- **`/search` returns `401`/`403` with a Serper `detail`.** The `SERPER_API_KEY` secret is missing or wrong — set it in the Worker (Settings → Variables and Secrets). A `429` from `/search` means the Serper plan quota is exhausted; top up or upgrade at [serper.dev](https://serper.dev). (The previous DuckDuckGo backend throttled the Worker's datacentre IP and served a bot-challenge page after a few queries — that failure mode, where search "worked for a few queries then went *vorübergehend nicht verfügbar*", is gone with the keyed Serper API.)
 - **`/llm` returns 200 but the assistant message is empty.** Almost always a `max_tokens` issue, or the model id in `embed.html`'s `RCT_LLM_MODEL` is wrong. Check the Worker live tail in the Cloudflare dashboard.
 
 ### Embed / deployment
@@ -222,7 +223,7 @@ Thesis WIP directory:
 | Reporting standard | CONSORT-AI (primary) + CONSORT-SPI + TIDieR | AI intervention in a social/psychological trial |
 | Pre-test | Posttest-only (no content-matched pre-test) | Sensitisation d=0.43 (Willson 1982), asymmetric testing effect, demand characteristics in an offloading study |
 | Baseline equivalence | MAILS-S (AI literacy) + Mini-VLAT V2 (visual data literacy) + demographics | Capture relevant individual differences without target-content exposure |
-| Active control | Web search (DuckDuckGo), not no-tool | Ecological validity: compare against existing practice (Freedland et al. 2011); precedent in Shen & Tamkin (2026) |
+| Active control | Web search (Google via Serper.dev), not no-tool | Ecological validity: compare against existing practice (Freedland et al. 2011); precedent in Shen & Tamkin (2026) |
 | Primary outcome timing | Immediate post-test (primary), delayed post-test (secondary) | Pragmatic: delayed follow-up risks non-random attrition in online adult sample |
 | Analysis framework | OLS with arm dummies, HC1 SEs, Bonferroni-corrected pairwise contrasts | ITT primary, per-protocol sensitivity |
 

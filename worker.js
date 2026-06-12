@@ -5,9 +5,9 @@
  *   POST /  or  POST /llm     → forwards to OpenRouter chat completions
  *                               with the secret OPENROUTER_API_KEY (the
  *                               participant-facing generator).
- *   POST /search              → server-side scrape of DuckDuckGo's HTML
- *                               results page, parsed into JSON. No API
- *                               key, no signup, no quota.
+ *   POST /search              → Google web results via the Serper.dev
+ *                               API (server-side, secret SERPER_API_KEY),
+ *                               normalised to JSON.
  *   POST /judge               → forwards to OpenRouter with the secret
  *                               OPENROUTER_JUDGE_API_KEY for the LLM-as-
  *                               Judge fidelity layer (Socratic arm only).
@@ -21,12 +21,15 @@
  *                               automatically when an iframe is blocked by
  *                               X-Frame-Options / CSP frame-ancestors.
  *
- * History: the SEARCH route originally targeted Google Programmable
- * Search (Google removed "search the entire web" for new engines in
- * 2024) and then Brave Search (free tier requires a payment card on
- * file). DuckDuckGo's HTML page is publicly accessible and DDG
- * permits non-commercial use, which suits a thesis pilot. The
- * browser-facing response shape is unchanged across all backends:
+ * History: the SEARCH route has run on Google Programmable Search
+ * (Google removed "search the entire web" for new engines in 2024),
+ * Brave Search (free tier needs a card on file), and a DuckDuckGo HTML
+ * scrape. The DDG scrape was publicly accessible but rate-limited from
+ * datacentre IPs — it served its anomaly page after a few queries,
+ * breaking the SEARCH control mid-session. The current backend is the
+ * Serper.dev Google Search API: keyed, quota-backed, and reliable at
+ * trial scale. The browser-facing response shape is unchanged across
+ * all backends:
  *   {items: [{title, url, displayUrl, snippet}], total}
  *
  * All three routes share the same Origin allowlist + CORS headers +
@@ -47,8 +50,9 @@
  *   ALLOWED_ORIGINS           Text    Comma-separated origins. Example:
  *                                      https://bruno20033.github.io,
  *                                      https://oii.eu.qualtrics.com
- *
- *   (No SEARCH_* secret is required — DuckDuckGo needs none.)
+ *   SERPER_API_KEY            Secret  Serper.dev API key — used by
+ *                                      /search for Google results.
+ *                                      Get one at serper.dev.
  *
  * Optional:
  *   HTTP_REFERER              Text    Sent to OpenRouter for attribution.
@@ -57,13 +61,12 @@
  *                                      (default 1024).
  *   JUDGE_MAX_TOKENS          Text    Hard cap on max_tokens for /judge
  *                                      (default 400 — short JSON only).
- *   SEARCH_NUM_RESULTS        Text    Max results per search query
+ *   SEARCH_NUM_RESULTS        Text    Max organic results per query
  *                                      (1-30, default 10).
- *   SEARCH_REGION             Text    DDG region code, default 'wt-wt'
- *                                      (no region). Examples: 'us-en',
- *                                      'uk-en', 'de-de'.
- *   SEARCH_SAFESEARCH         Text    'off' | 'moderate' | 'strict'
- *                                      (default 'moderate').
+ *   SEARCH_GL                 Text    Google country code, default 'us'.
+ *                                      Examples: 'us', 'gb', 'de'.
+ *   SEARCH_HL                 Text    Google interface language,
+ *                                      default 'en'. Examples: 'en', 'de'.
  */
 
 export default {
@@ -91,12 +94,17 @@ export default {
     }
 
     // ---------------------------------------------------------------
-    // SEARCH route → DuckDuckGo HTML results, parsed server-side.
-    // No API key required.
+    // SEARCH route → Google web results via the Serper.dev API.
+    // Requires the SERPER_API_KEY secret. Serper returns Google's SERP
+    // as JSON; we keep only organic results and normalise them to the
+    // stable browser-facing shape {items:[{title,url,displayUrl,snippet}]}.
     // ---------------------------------------------------------------
     if (url.pathname === '/search') {
       if (request.method !== 'POST') {
         return json({ error: 'Method Not Allowed' }, 405, request, env);
+      }
+      if (!env.SERPER_API_KEY) {
+        return json({ error: 'Worker misconfigured: SERPER_API_KEY not set' }, 500, request, env);
       }
 
       let body;
@@ -107,47 +115,37 @@ export default {
       }
 
       const count = clampInt(env.SEARCH_NUM_RESULTS, 10, 1, 30);
-      const region = env.SEARCH_REGION || 'wt-wt';
-      // DDG safesearch query param: kp=1 strict, kp=-1 off, kp=-2 moderate.
-      const safe = (env.SEARCH_SAFESEARCH || 'moderate').toLowerCase();
-      const kp = safe === 'strict' ? '1' : (safe === 'off' ? '-1' : '-2');
+      const gl = (env.SEARCH_GL || 'us').toLowerCase();   // Google country
+      const hl = (env.SEARCH_HL || 'en').toLowerCase();   // interface language
 
-      const formBody = new URLSearchParams({
-        q:  query,
-        kl: region,   // region/locale code
-        kp: kp,       // safesearch
-      }).toString();
-
-      // POST to DuckDuckGo HTML endpoint. POST returns a fully rendered
-      // HTML results page with stable .result__a / .result__snippet
-      // anchors that we can extract with HTMLRewriter.
-      const upstream = await fetch('https://html.duckduckgo.com/html/', {
-        method: 'POST',
-        headers: {
-          'User-Agent':      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-          'Accept':          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Content-Type':    'application/x-www-form-urlencoded',
-        },
-        body: formBody,
-      });
+      let upstream;
+      try {
+        upstream = await fetch('https://google.serper.dev/search', {
+          method: 'POST',
+          headers: {
+            'X-API-KEY':    env.SERPER_API_KEY,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ q: query, num: count, gl: gl, hl: hl }),
+        });
+      } catch (err) {
+        return json({ error: 'Serper fetch failed: ' + String(err && err.message || err) }, 502, request, env);
+      }
 
       if (!upstream.ok) {
+        // 401/403 = bad or missing key; 429 = Serper plan quota exhausted.
+        const detail = await upstream.text().catch(function () { return ''; });
         return json(
-          { error: 'DuckDuckGo HTTP ' + upstream.status, http_status: upstream.status },
+          { error: 'Serper HTTP ' + upstream.status, http_status: upstream.status, detail: String(detail).slice(0, 300) },
           upstream.status >= 400 ? upstream.status : 502,
           request, env
         );
       }
 
-      const html = await upstream.text();
+      let data;
+      try { data = await upstream.json(); } catch { return json({ error: 'Serper returned non-JSON' }, 502, request, env); }
 
-      // Detect DDG's anti-bot interstitial and surface it cleanly.
-      if (/anomaly|please try again/i.test(html) && !/result__a/.test(html)) {
-        return json({ error: 'DuckDuckGo rate-limit/anomaly check; retry shortly.' }, 429, request, env);
-      }
-
-      const items = parseDuckDuckGoHtml(html, count);
+      const items = parseSerperResults(data, count);
       return json({ items, total: String(items.length) }, 200, request, env);
     }
 
@@ -435,81 +433,37 @@ function hostnameOf(url) {
 }
 
 // -------------------------------------------------------------------
-// DuckDuckGo HTML parser
+// Serper.dev results parser
 // -------------------------------------------------------------------
 //
-// DDG's html.duckduckgo.com results page renders each web result as:
+// Serper returns Google's SERP as JSON. Organic web results live in the
+// `organic` array, each shaped roughly as:
 //
-//   <div class="result results_links results_links_deep web-result">
-//     <h2 class="result__title">
-//       <a class="result__a" href="REDIRECT_URL">TITLE_HTML</a>
-//     </h2>
-//     <a class="result__snippet" href="REDIRECT_URL">SNIPPET_HTML</a>
-//     <a class="result__url" href="REDIRECT_URL">DISPLAY_URL</a>
-//   </div>
+//   { "title": "...", "link": "https://...", "snippet": "...",
+//     "position": 1, "sitelinks": [...] }
 //
-// REDIRECT_URL is one of:
-//   //duckduckgo.com/l/?uddg=ENCODED_REAL_URL&...   (DDG redirect wrapper)
-//   https://www.example.com/...                     (occasionally direct)
-//
-// The HTML is reasonably stable — DDG hasn't changed these class names
-// in years — but the parser is forgiving so a small markup tweak won't
-// silently zero out results.
-function parseDuckDuckGoHtml(html, max) {
-  // Split the page into per-result blocks. Each organic result block
-  // begins with `<div class="result results_links ...">`. Sponsored
-  // results carry an extra `result--ad` / `result__sponsored` class
-  // and we skip them so the experimental control isn't contaminated
-  // with paid placements.
-  var blocks = html.split(/<div\s+class="result\s+results_links/);
+// We map those to the browser-facing {title, url, displayUrl, snippet}
+// shape and cap at `max`. Non-organic blocks (answerBox, knowledgeGraph,
+// topStories, paid ads) are intentionally ignored so the experimental
+// SEARCH control sees plain organic results only — the same contract the
+// earlier DuckDuckGo/Brave backends honoured. Serper fields are already
+// plain text (no HTML), and embed.html escapes them on render anyway.
+function parseSerperResults(data, max) {
+  var organic = (data && Array.isArray(data.organic)) ? data.organic : [];
   var results = [];
-
-  for (var i = 1; i < blocks.length && results.length < max; i++) {
-    var block = blocks[i];
-
-    // Skip sponsored / ad blocks.
-    if (/result--ad|result__sponsored|nrn-react-div/i.test(block)) continue;
-
-    // Title + outbound href.
-    var titleMatch = /<a\s+rel="nofollow"\s+class="result__a"\s+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/.exec(block);
-    if (!titleMatch) continue;
-    var url = unwrapDdgUrl(titleMatch[1]);
-    var title = stripHtml(titleMatch[2]);
+  for (var i = 0; i < organic.length && results.length < max; i++) {
+    var r = organic[i] || {};
+    var url = r.link ? String(r.link) : '';
+    var title = r.title ? String(r.title) : '';
     if (!url || !title) continue;
-
-    // Skip residual ad redirects that escaped the sponsored-class check.
-    if (/duckduckgo\.com\/y\.js/i.test(url)) continue;
-
-    // Snippet — separate regex so we tolerate the result__extras div
-    // that DDG injects between title and snippet.
-    var snippetMatch = /<a\s+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(block);
-    var snippet = snippetMatch ? stripHtml(snippetMatch[1]) : '';
-
     results.push({
       title: title,
       url: url,
       displayUrl: hostnameOf(url),
-      snippet: snippet
+      snippet: r.snippet ? String(r.snippet) : ''
     });
   }
   return results;
-}
-
-function unwrapDdgUrl(href) {
-  // External links land at //duckduckgo.com/l/?uddg=ENCODED&rut=...
-  // Pull out the actual destination so the click navigates straight to
-  // the real site, not through DDG's redirector.
-  if (!href) return '';
-  if (href.indexOf('//duckduckgo.com/l/?') === 0) href = 'https:' + href;
-  if (href.indexOf('https://duckduckgo.com/l/?') === 0 ||
-      href.indexOf('http://duckduckgo.com/l/?')  === 0) {
-    try {
-      var u = new URL(href);
-      var real = u.searchParams.get('uddg');
-      return real ? decodeURIComponent(real) : href;
-    } catch { return href; }
-  }
-  return href.indexOf('//') === 0 ? 'https:' + href : href;
 }
 
 function stripHtml(s) {

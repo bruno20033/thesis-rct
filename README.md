@@ -21,7 +21,7 @@ The two are mutually exclusive per question. The iframe section below is the ori
 | `qualtrics-llm.html` | One-line `<iframe>` snippet to paste into the LLM-branch question (the same iframe serves both Socratic and Unrestricted arms; the `arm` param is filled from Embedded Data). |
 | `qualtrics-search.html` | One-line `<iframe>` snippet to paste into the SEARCH-branch question (the Google-only control arm). |
 | `qualtrics-question-js.js` | Qualtrics-side bridge — paste into both questions' JS panels. Listens for postMessage from the iframe and writes to Embedded Data (chat, search, and Judge fields), shows the Next button, and resizes the iframe. |
-| `worker.js` | Cloudflare Worker that holds OpenRouter API keys as server-side secrets and proxies three routes: `POST /llm` (generator), `POST /search` (DDG), and `POST /judge` (LLM-as-Judge fidelity layer). **Deploy this so the keys never ship in `embed.html`.** See [Backend proxy setup](#backend-proxy-setup-cloudflare-worker) below. |
+| `worker.js` | Cloudflare Worker that holds OpenRouter API keys as server-side secrets and proxies three routes: `POST /llm` (generator), `POST /search` (Google via Serper.dev), and `POST /judge` (LLM-as-Judge fidelity layer). **Deploy this so the keys never ship in `embed.html`.** See [Backend proxy setup](#backend-proxy-setup-cloudflare-worker) below. |
 | `rct_arm_prompts.md` | Canonical, version-controlled copies of the two LLM-arm system prompts (Socratic, Unrestricted). Mirror into `embed.html` JS literals before deploying. |
 | `rct_judge_prompts.md` | Canonical Judge system prompt + synthetic calibration corpus + calibration log. Mirror into `embed.html`'s `RCT_JUDGE_SYSTEM_PROMPT` literal before deploying. |
 | `README.md` | This file. |
@@ -75,7 +75,7 @@ The study has **three arms**, randomised between-subjects:
 
 | Arm | URL parameters | What participants see |
 |---|---|---|
-| **Google-only (control)** | `?condition=SEARCH` | Real DuckDuckGo-backed web search panel; chart + question on the left. No LLM. |
+| **Google-only (control)** | `?condition=SEARCH` | Real Google web search panel (Serper.dev API); chart + question on the left. No LLM. |
 | **Socratic LLM (treatment)** | `?condition=LLM&arm=socratic` | LLM chat with a probe-only system prompt; an LLM-as-Judge layer scores every turn for scaffold fidelity in the background (passive mode). |
 | **Unrestricted LLM (treatment)** | `?condition=LLM&arm=unrestricted` | LLM chat with a generally-helpful system prompt. No Judge layer. |
 
@@ -335,7 +335,7 @@ JSON-object semantics: if a key appears twice (e.g. the participant typed the sa
 }
 ```
 
-For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from **DuckDuckGo** scraped server-side by the same Cloudflare Worker (no API key required); clicking a result navigates the embed page same-window to the destination, and dwell time is logged on `pageshow` when the participant returns via the browser back button. See *DuckDuckGo search backend* below.
+For the LLM condition, chat is **multi-turn**: every prior `prompt`/`response` event is replayed as `user`/`assistant` messages on each request. For SEARCH, results come from **Google** via the Serper.dev API, proxied by the same Cloudflare Worker; clicking a result opens it in the in-panel reader so the chart and question stay visible, and dwell time is logged per click. See *Google search backend (Serper.dev)* below.
 
 ### SEARCH event types
 
@@ -410,7 +410,7 @@ The worker now holds the key; no further key handling is needed in your repo.
 The Worker exposes two routes under one origin-locked CORS policy:
 
 - **`POST /` and `POST /llm`** — forward to OpenRouter chat completions with the secret `OPENROUTER_API_KEY` (the participant-facing generator). `max_tokens` is clamped to the `MAX_TOKENS` env var (default 1024).
-- **`POST /search`** — server-side scrape of DuckDuckGo's HTML results page, parsed into JSON. **No API key, no signup, no quota cap.** Returns up to 30 `{title, url, displayUrl, snippet}` items. Sponsored ads are filtered out. (We tried Google Programmable Search first — Google removed "search the entire web" for new engines in 2024 — and Brave Search next — their free tier requires a billing card. DuckDuckGo's HTML page is the best card-free option.)
+- **`POST /search`** — Google web results via the [Serper.dev](https://serper.dev) API, using the secret `SERPER_API_KEY`. Returns up to 30 organic `{title, url, displayUrl, snippet}` items; non-organic blocks (answer box, knowledge graph, ads) are dropped. (Earlier backends: Google Programmable Search — removed "search the entire web" for new engines in 2024 — Brave Search — free tier needs a billing card — and a DuckDuckGo HTML scrape, which DDG rate-limited from datacentre IPs after a handful of queries.)
 - **`POST /judge`** — forwards to OpenRouter with the **separate** secret `OPENROUTER_JUDGE_API_KEY` for the LLM-as-Judge fidelity layer (Socratic arm only). Judge model id is supplied per request in the `model` body field, so the Judge provider can be swapped without redeploying. `max_tokens` is clamped to `JUDGE_MAX_TOKENS` (default 400). `temperature` is clamped to ≤ 0.3 (forced to 0.1 if higher) so Judge grading stays near-deterministic.
 
 Cross-cutting:
@@ -418,33 +418,33 @@ Cross-cutting:
 - **Method allowlist** — POST only (plus OPTIONS for CORS pre-flight).
 - **CORS headers** — `Access-Control-Allow-Origin` is set to the matching allowed origin (per-request), not `*`.
 
-For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and a daily spend cap on the OpenRouter key. DuckDuckGo has no formal rate limit, but they do throttle aggressive automated traffic — for thesis-scale (a few hundred queries/day) this is a non-issue.
+For higher-stakes deployments, add per-IP rate limiting in Cloudflare's dashboard (Security → WAF → Rate limiting) and daily spend caps on the OpenRouter and Serper keys.
 
-## DuckDuckGo search backend (zero setup)
+## Google search backend (Serper.dev)
 
-The SEARCH condition's results come from **DuckDuckGo**, scraped server-side by the Cloudflare Worker. No API key, no signup, no card, no quota — DDG's HTML page is publicly accessible and they permit non-commercial use.
+The SEARCH condition's results come from **Google**, via the [Serper.dev](https://serper.dev) Search API, proxied server-side by the Cloudflare Worker. Serper returns Google's SERP as JSON; the Worker keeps the organic results and normalises them to the shape the browser already expects. This requires a `SERPER_API_KEY` secret on the Worker.
 
-> **Why DuckDuckGo?** We considered three alternatives. Google Programmable Search no longer allows "search the entire web" for new engines (since 2024). Brave Search's free tier requires a billing card on file. DuckDuckGo is the only option that lets a thesis pilot run end-to-end with zero per-query cost and no account friction. Visual presentation in `embed.html` (blue title link, green URL hostname, grey snippet) is identical regardless of backend.
+> **Why Serper?** Earlier backends were card-free but unreliable. Google Programmable Search no longer allows "search the entire web" for new engines (since 2024). A DuckDuckGo HTML scrape needs no key, but DDG rate-limits datacentre IPs — it served its bot-challenge page after only a few queries from the Worker, breaking the SEARCH control mid-session. Serper gives real Google results, a keyed quota that doesn't throttle at trial scale, and a clean JSON contract that's reproducible and citable in the Methods. Visual presentation in `embed.html` (blue title link, green URL hostname, grey snippet) is identical regardless of backend.
 
 ### What it does behind the scenes
 
 The Worker `POST /search` route:
 1. Takes a `{ query }` JSON body from the browser.
-2. POSTs `q=<query>&kl=<region>&kp=<safesearch>` to `html.duckduckgo.com/html/` with a normal browser User-Agent.
-3. Parses the HTML response, extracting up to N organic results.
-4. **Filters out sponsored ads** (results with `result--ad` / `result__sponsored` classes, or `duckduckgo.com/y.js` redirect URLs) so the experimental control isn't contaminated with paid placements.
-5. **Unwraps DuckDuckGo's redirect URLs** (`//duckduckgo.com/l/?uddg=…`) to the real destination, so the participant's click navigates straight to e.g. `wikipedia.org` and dwell time is measured against the actual site.
-6. Returns the same `{ items: [{title, url, displayUrl, snippet}], total }` shape the browser already expects.
+2. POSTs `{ q, num, gl, hl }` to `https://google.serper.dev/search` with the `X-API-KEY` header.
+3. Reads the JSON response and keeps the `organic` array (up to N results).
+4. **Ignores non-organic blocks** (answer box, knowledge graph, top stories, paid ads) so the experimental control sees plain organic results only.
+5. Returns the same `{ items: [{title, url, displayUrl, snippet}], total }` shape the browser already expects — so `embed.html` and the Qualtrics bridge need no changes.
 
-### Optional Worker env vars
+### Required + optional Worker env vars
 
 In Workers & Pages → your worker → **Settings → Variables and Secrets**:
 
-- `SEARCH_NUM_RESULTS` (Type: **Text**) → `1`–`30`, default 10.
-- `SEARCH_REGION` (Type: **Text**) → DuckDuckGo region code, default `wt-wt` (no region). Examples: `us-en`, `uk-en`, `de-de`. Affects result locale.
-- `SEARCH_SAFESEARCH` (Type: **Text**) → `off` | `moderate` | `strict`, default `moderate`.
+- `SERPER_API_KEY` (Type: **Secret**, **required**) → your Serper.dev API key. Get one at [serper.dev](https://serper.dev) (free starter credits, then ~$0.001/query).
+- `SEARCH_NUM_RESULTS` (Type: **Text**, optional) → `1`–`30`, default 10.
+- `SEARCH_GL` (Type: **Text**, optional) → Google country code, default `us`. Examples: `us`, `gb`, `de`.
+- `SEARCH_HL` (Type: **Text**, optional) → Google interface language, default `en`. Examples: `en`, `de`.
 
-None of these are required — the defaults work out of the box.
+Only `SERPER_API_KEY` is required; the rest have working defaults.
 
 ### Test the route
 
@@ -452,16 +452,16 @@ None of these are required — the defaults work out of the box.
 curl -i https://thesis-llm-proxy.YOUR-CF-USERNAME.workers.dev/search \
   -H "Origin: https://bruno20033.github.io" \
   -H "Content-Type: application/json" \
-  -d '{"query":"acme corp profitable"}'
+  -d '{"query":"how to read a parallel coordinates chart"}'
 ```
 
-Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}` with ~10 organic results. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `429 DuckDuckGo rate-limit/anomaly check` means DDG temporarily blocked the Worker — wait a minute and re-test.
+Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet":"…"}, …], "total":"…"}` with ~10 organic results. A `403 Forbidden origin` means `ALLOWED_ORIGINS` doesn't include the test origin. A `401`/`403` carrying a Serper `detail` means the key is missing or wrong. A `429` means the Serper plan quota is exhausted — top up or upgrade.
 
 ### Reliability notes
 
-- DDG's HTML structure (`result__a`, `result__snippet` class names) has been stable for years; the parser is also forgiving (a small markup tweak won't silently zero out results — the parser would simply return fewer entries and the UI would show what it got).
-- If DDG ever serves the "anomaly" page (their bot challenge), the Worker surfaces a `429` instead of returning empty results, so the embed's retry loop kicks in (2 retries with back-off, then a clean `error` event).
-- For thesis-scale (a few hundred queries/day) DDG won't throttle. If you ever need to scale to thousands of queries/day, switch the backend to Brave (with a billing card) or self-host SearXNG — the Worker code change is small (one upstream fetch).
+- Serper is a keyed, quota-backed API, so there's no datacentre-IP rate-limiting like the old DDG scrape — the failure mode that broke the SEARCH arm mid-session ("worked for a few searches, then *Suche vorübergehend nicht verfügbar*") is gone.
+- If the Worker ever returns non-OK, the embed's retry loop kicks in (2 retries with back-off, then a clean `error` event and the "search temporarily unavailable" message).
+- Watch per-query spend on the Serper dashboard and set a plan cap before launch, the same way you cap the OpenRouter keys.
 
 ## LLM-as-Judge fidelity layer (Socratic arm only)
 
@@ -569,7 +569,7 @@ Use this path when you don't have a public URL to host `embed.html` on. The two 
 | Hosting | Static URL (`embed.html`) + Qualtrics paste | Everything inside Qualtrics |
 | Chart | Hand-rolled SVG | [Chart.js](https://www.chartjs.org/) via CDN |
 | LLM | Single round-trip (non-streaming) | **Streaming** (OpenRouter SSE) |
-| **SEARCH** | **Real DuckDuckGo** via Worker `/search` route + click + dwell tracking (no API key) | **Still mocked** (4 hardcoded results); click event logged but no navigation |
+| **SEARCH** | **Real Google** via Worker `/search` route (Serper.dev API) + click + dwell tracking | **Still mocked** (4 hardcoded results); click event logged but no navigation |
 | Question types | True/False only | True/False, MC (single), MC (multi), Likert |
 | Embedded Data field | `InteractionLog` (one) | `LLM_Log` and `Search_Log` (per condition) |
 | Layout | `min-height: 560px` (page grows) | `height: 600px` with internal scroll per panel |

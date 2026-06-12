@@ -734,8 +734,8 @@
   var RESET_SEARCH_BETWEEN_QUESTIONS = true;   // clear search results when advancing to next question
 
   // SEARCH backend — Cloudflare Worker /search route, which proxies to
-  // DuckDuckGo HTML and parses results server-side. No API key needed.
-  // See README "DuckDuckGo search backend" for the architecture.
+  // the Serper.dev Google Search API server-side (Worker holds the key).
+  // See README "Google search backend (Serper.dev)" for the architecture.
   var SEARCH_PROXY_URL    = (typeof PROXY_URL === 'string' ? PROXY_URL : '').replace(/\/+$/, '') + '/search';
   var SEARCH_MAX_RETRIES  = 2;            // 1 initial attempt + 2 retries = 3 total
   var SEARCH_RETRY_DELAY  = 300;          // ms; multiplied by attempt number
@@ -2180,7 +2180,7 @@
   }
 
   /* ==================================================================
-   * Real web search via Cloudflare Worker → DuckDuckGo HTML scrape.
+   * Real web search via Cloudflare Worker → Serper.dev Google Search.
    *
    * Click flow (in-panel viewer): clicking a result swaps the search
    * results list for an iframe loaded with the destination URL inside
