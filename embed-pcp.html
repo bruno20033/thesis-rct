@@ -941,7 +941,7 @@ Transferable reading principles, not instance answers. Deploy these **after** th
           text:       loc(it, 'questionText'),
           chartId:    it.chartId,
           chartType:  it.chartType,
-          chartTitle: (charts[it.chartId] && loc(charts[it.chartId], 'title')) || it.chartType || 'Chart',
+          chartTitle: (charts[it.chartId] && loc(charts[it.chartId], 'title')) || (LANG === 'DE' && it.chartType === 'Parallel Coordinates' ? 'Parallelkoordinaten' : it.chartType) || 'Chart',
           options:    (it.options || []).map(function (o) { return { key: o.label, text: loc(o, 'text') }; }),
           hasOmit:    it.hasOmit !== false
         };
@@ -1497,11 +1497,11 @@ Transferable reading principles, not instance answers. Deploy these **after** th
     holder.innerHTML =
       '<figure style="margin:0">' +
         '<img class="vlat-chart-img" src="' + esc(src) + '" ' +
-             'alt="' + esc(q.chartType + ': ' + title) + '" ' +
+             'alt="' + esc(title) + '" ' +
              'style="width:100%;height:auto;display:block;border:1px solid #eceff1;border-radius:4px;background:#fff" ' +
              'onerror="this.style.display=\'none\';var f=this.parentNode.querySelector(\'.vlat-chart-missing\');if(f)f.style.display=\'block\';" />' +
         '<div class="vlat-chart-missing" style="display:none;padding:32px;text-align:center;color:#90a4ae;border:1px dashed #cfd8dc;border-radius:4px">' + esc(t('chart_unavailable')) + '<br/><code style="font-size:11px">charts/' + esc(q.chartId) + '.png</code></div>' +
-        '<figcaption style="margin-top:6px;font-size:12px;color:#607d8b">' + esc(q.chartType) + '</figcaption>' +
+        '<figcaption style="margin-top:6px;font-size:12px;color:#607d8b">' + esc(LANG === 'DE' && q.chartType === 'Parallel Coordinates' ? 'Parallelkoordinaten' : q.chartType) + '</figcaption>' +
       '</figure>';
     postHeight();
   }
@@ -2491,7 +2491,7 @@ Transferable reading principles, not instance answers. Deploy these **after** th
           var res = await fetch(SEARCH_PROXY_URL, {
             method:  'POST',
             headers: { 'Content-Type': 'application/json' },
-            body:    JSON.stringify({ query: query })
+            body:    JSON.stringify({ query: query, lang: LANG })
           });
           var data = null;
           try { data = await res.json(); } catch (e) { /* fall through to error */ }

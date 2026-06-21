@@ -19,7 +19,8 @@
     ${e://Field/ResponseID}  → Qualtrics' unique response id (embed `pid`).
 
   embed-pcp.html hardcodes PHASE='vlattrain' and loads the practice-block
-  PCP items itself; no phase= or set= params are needed. English-only.
+  PCP items itself; no phase= or set= params are needed. Bilingual: the embed
+  UI + items follow ${e://Field/Q_Language} (EN base + DE overlay) via lang=.
 
   Companion JS: paste qualtrics-pcp-train-js.js into this question's
   "Add JavaScript" panel (NOT qualtrics-question-js.js, and NOT the
@@ -27,7 +28,7 @@
   ====================================================================
 -->
 <iframe
-  src="https://bruno20033.github.io/thesis-rct/embed-pcp.html?condition=LLM&arm=${e://Field/arm}&pid=${e://Field/ResponseID}"
+  src="https://bruno20033.github.io/thesis-rct/embed-pcp.html?condition=LLM&arm=${e://Field/arm}&pid=${e://Field/ResponseID}&lang=${e://Field/Q_Language}"
   width="100%"
   height="800"
   frameborder="0"

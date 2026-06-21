@@ -115,8 +115,13 @@ export default {
       }
 
       const count = clampInt(env.SEARCH_NUM_RESULTS, 10, 1, 30);
-      const gl = (env.SEARCH_GL || 'us').toLowerCase();   // Google country
-      const hl = (env.SEARCH_HL || 'en').toLowerCase();   // interface language
+      // Per-request language (bilingual study): the embed sends lang=DE for German
+      // participants so the SEARCH arm gets German Google results; everyone else
+      // falls back to the Worker's configured defaults (English).
+      const reqLang = (body && body.lang ? String(body.lang) : '').trim().toUpperCase();
+      const isDE = reqLang === 'DE';
+      const gl = isDE ? 'de' : (env.SEARCH_GL || 'us').toLowerCase();   // Google country
+      const hl = isDE ? 'de' : (env.SEARCH_HL || 'en').toLowerCase();   // interface language
 
       let upstream;
       try {

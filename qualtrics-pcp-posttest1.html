@@ -8,7 +8,7 @@
   PCP LITERACY POST-TEST 1 — immediate, UNAIDED outcome measure (RQ1, primary).
   =============================================================================
   Self-contained renderer, hosted on GitHub Pages and embedded in Qualtrics via
-    <iframe src="https://bruno20033.github.io/thesis-rct/qualtrics-pcp-posttest1.html?pid=${e://Field/ResponseID}">
+    <iframe src="https://bruno20033.github.io/thesis-rct/qualtrics-pcp-posttest1.html?pid=${e://Field/ResponseID}&lang=${e://Field/Q_Language}">
   with qualtrics-pcp-js.js pasted into the question's "Add JavaScript" panel.
 
   Shows the 16 block:"posttest1" items from pcp_items_data.js (4 per Bloom level),
@@ -17,7 +17,8 @@
 
   NO ANSWER KEY ships here on purpose — this page is participant-facing and must
   not expose correct answers. Correctness is scored OFFLINE from pcp_<id>_response
-  against PCP_KEY in pcp_scoring.js. English-only (the BTPL instrument is English).
+  against PCP_KEY in pcp_scoring.js. Bilingual: EN base + DE overlay
+  (pcp_items_de.js); the UI + item text follow ?lang= (from Q_Language).
   =============================================================================
 -->
 <style>
@@ -82,7 +83,7 @@
 <div id="quiz-container">
   <div class="top-bar">
     <div>
-      <div class="progress">Question <span id="q-current">1</span> of <span id="q-total">?</span></div>
+      <div class="progress"><span id="lbl-question">Question</span> <span id="q-current">1</span> <span id="lbl-of">of</span> <span id="q-total">?</span></div>
       <div class="progress-bar"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
     </div>
     <div id="timer" class="timer"></div>
@@ -95,11 +96,12 @@
 </div>
 
 <div id="complete-screen" class="complete-screen" style="display:none">
-  <h2>Block Complete</h2>
-  <p>Your responses have been recorded. Please wait…</p>
+  <h2 id="complete-title">Block Complete</h2>
+  <p id="complete-msg">Your responses have been recorded. Please wait…</p>
 </div>
 
 <script src="pcp_items_data.js"></script>
+<script src="pcp_items_de.js"></script>
 <script>
 (function () {
   // ── Configuration ──
@@ -111,6 +113,18 @@
 
   var params = new URLSearchParams(window.location.search);
   var pid = params.get('pid') || 'default';
+
+  // ── Language (mirrors embed-pcp.html: ?lang= is fed from Qualtrics Q_Language) ──
+  var LANG = ((params.get('lang') || 'EN').slice(0, 2)).toUpperCase();
+  if (LANG !== 'DE') LANG = 'EN';
+  try { document.documentElement.lang = LANG.toLowerCase(); } catch (e) {}
+  var UI = {
+    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'Your responses have been recorded. Please wait…' },
+    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Ihre Antworten wurden gespeichert. Bitte warten…' }
+  };
+  var L = UI[LANG] || UI.EN;
+  // loc(obj, field): German variant obj[field + '_de'] (from pcp_items_de.js) when LANG==='DE', else English.
+  function loc(o, field) { if (LANG === 'DE' && o && o[field + '_de'] != null) return o[field + '_de']; return o ? o[field] : undefined; }
 
   // ── Items for this block ──
   var items = (typeof PCP_ITEMS !== 'undefined' ? PCP_ITEMS : []).filter(function (i) { return i.block === BLOCK; });
@@ -152,6 +166,16 @@
   var elNext = document.getElementById('btn-next');
   elTotal.textContent = String(items.length);
 
+  // Localize static chrome (labels/buttons) per LANG.
+  (function localizeChrome() {
+    var set = function (id, txt) { var el = document.getElementById(id); if (el) el.textContent = txt; };
+    set('lbl-question', L.question);
+    set('lbl-of', L.of);
+    set('btn-next', L.next);
+    set('complete-title', L.complete);
+    set('complete-msg', L.recorded);
+  })();
+
   function post(msg) { try { window.parent.postMessage(msg, '*'); } catch (e) {} }
   function sendHeight() { post({ type: 'rct_height', value: document.body.scrollHeight }); }
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
@@ -173,7 +197,7 @@
       'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' + escHtml(alt) +
       '</div><div class=hint>[chart image not loaded — charts/' + escHtml(item.chartId) + '.png]</div></div>\'">';
 
-    elQuestion.textContent = item.questionText;
+    elQuestion.textContent = loc(item, 'questionText');
 
     // Options — render the instrument's own options only (no appended "don't know").
     var html = '';
@@ -181,7 +205,7 @@
       var opt = item.options[i];
       html += '<li class="option" data-value="' + escAttr(opt.label) + '" onclick="selectOption(this)">';
       html += '<input type="radio" name="answer" id="opt_' + i + '">';
-      html += '<label for="opt_' + i + '"><span class="label-key">' + escHtml(opt.label) + '</span>' + escHtml(opt.text) + '</label>';
+      html += '<label for="opt_' + i + '"><span class="label-key">' + escHtml(opt.label) + '</span>' + escHtml(loc(opt, 'text')) + '</label>';
       html += '</li>';
     }
     elOptions.innerHTML = html;
@@ -258,6 +282,7 @@
     ed['pcp_' + BLOCK + '_attempted'] = String(attempted);
     ed['pcp_' + BLOCK + '_order'] = itemOrder.join(',');
     ed['pcp_' + BLOCK + '_total'] = String(items.length);
+    ed['pcp_' + BLOCK + '_lang'] = LANG;
     // Authoritative blob for offline scoring (robust to shuffle): id + chosen label per item.
     ed['pcp_' + BLOCK + '_responses'] = JSON.stringify(responses.map(function (r) { return { id: r.itemId, chart_id: r.chart_id, format: r.format, answer: r.response, rt_ms: r.rt, timeout: r.timeout }; }));
 
