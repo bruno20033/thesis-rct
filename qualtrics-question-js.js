@@ -102,6 +102,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         var MAX_TURNS = 20;
         var prompts        = [];
         var responses      = [];
+        var llmLatencies   = [];   // response latency_ms     (LLM conditions)
         var queries        = [];
         var clicks         = [];   // result_click events    (SEARCH condition)
         var dwells         = [];   // result_dwell events    (SEARCH condition)
@@ -109,7 +110,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         for (var i = 0; i < events.length; i++) {
           var ev = events[i];
           if      (ev.type === 'prompt'               && ev.content) prompts.push(ev.content);
-          else if (ev.type === 'response'             && ev.content) responses.push(ev.content);
+          else if (ev.type === 'response'             && ev.content) { responses.push(ev.content); llmLatencies.push(ev.latency_ms != null ? ev.latency_ms : ''); }
           else if (ev.type === 'search_query'         && ev.query)   queries.push(ev.query);
           else if (ev.type === 'result_click'         && ev.url)     clicks.push(ev);
           else if (ev.type === 'result_dwell'         && ev.url)     dwells.push(ev);
@@ -128,6 +129,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
           var j = judgements[k-1];
           Q.setEmbeddedData('prompt_'                   + k, prompts[k-1]   || '');
           Q.setEmbeddedData('response_'                 + k, responses[k-1] || '');
+          Q.setEmbeddedData('response_latency_ms_'      + k, llmLatencies[k-1] != null ? String(llmLatencies[k-1]) : '');
           Q.setEmbeddedData('search_query_'             + k, queries[k-1]   || '');
           Q.setEmbeddedData('search_click_'             + k, c ? (c.url   || '') : '');
           Q.setEmbeddedData('search_click_title_'       + k, c ? (c.title || '') : '');
