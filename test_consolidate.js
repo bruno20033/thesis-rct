@@ -90,5 +90,32 @@ r = consolidate([], items, 'NOAID');
 check('noaid: interaction null', r[0].interaction === null);
 check('noaid: entries + answers preserved', r.length === 2 && r[1].answer === 'C');
 
+// ──────────── adoption-latency capture: new wall-clock fields (Δ) ───────────
+// These prove the ADDITIVE fields that feed the SAP answer-adoption-latency
+// manipulation check (Δ = answer submission − last tool interaction) are
+// populated on the PCP aided-training items, and that Δ reconstructs ≥ 0.
+// LLM arm — assistant turn carries response_ts; item carries answer_ts.
+r = consolidate(socEvents, items, 'LLM');
+check('adopt/soc: q1 response_ts = response event ts', r[0].interaction.turns[0].response_ts === socEvents[1].ts);
+check('adopt/soc: q1 answer_ts = answer_final ts',     r[0].answer_ts === socEvents[3].ts);
+check('adopt/soc: q1 Δ reconstructs (2s, ≥0)',         (Date.parse(r[0].answer_ts) - Date.parse(r[0].interaction.turns[0].response_ts)) === 2000);
+check('adopt/soc: q2 response_ts = final response ts', r[1].interaction.turns[0].response_ts === socEvents[6].ts);
+check('adopt/soc: q2 answer_ts = answer_final ts',     r[1].answer_ts === socEvents[8].ts);
+r = consolidate(unrEvents, items, 'LLM');
+check('adopt/unr: q1 response_ts = response event ts', r[0].interaction.turns[0].response_ts === unrEvents[1].ts);
+check('adopt/unr: q1 answer_ts = answer_final ts',     r[0].answer_ts === unrEvents[2].ts);
+check('adopt/unr: q1 Δ reconstructs (1s, ≥0)',         (Date.parse(r[0].answer_ts) - Date.parse(r[0].interaction.turns[0].response_ts)) === 1000);
+// SEARCH arm analogue — query_ts + click ts give the last results-page interaction.
+r = consolidate(seaEvents, items, 'SEARCH');
+check('adopt/sea: q1 search1 query_ts present',        r[0].interaction.searches[0].query_ts === seaEvents[0].ts);
+check('adopt/sea: q1 search1 click ts present',        r[0].interaction.searches[0].clicks[0].ts === seaEvents[1].ts);
+check('adopt/sea: q1 answer_ts = answer_final ts',     r[0].answer_ts === seaEvents[6].ts);
+check('adopt/sea: q1 Δ vs last click (2s, ≥0)',        (Date.parse(r[0].answer_ts) - Date.parse(seaEvents[4].ts)) === 2000);
+check('adopt/sea: q2 click ts present',                r[1].interaction.searches[0].clicks[0].ts === seaEvents[8].ts);
+check('adopt/sea: q2 answer_ts = answer_final ts',     r[1].answer_ts === seaEvents[12].ts);
+// NOAID / empty stream — answer_ts is null-safe (no answer_final present).
+r = consolidate([], items, 'NOAID');
+check('adopt/noaid: answer_ts null when no events',    r[0].answer_ts === null);
+
 console.log(`\nconsolidation: ${pass} passed, ${fail} failed`);
 if (fail) process.exit(1);

@@ -61,13 +61,17 @@
       var e = evs[i];
       if (e.type === 'prompt') {
         flush();
-        cur = { prompt: (e.content == null ? '' : e.content), response: null, response_latency_ms: null, judge: null };
+        cur = { prompt: (e.content == null ? '' : e.content), response: null, response_latency_ms: null, response_ts: null, judge: null };
       } else if (e.type === 'response') {
-        if (!cur) cur = { prompt: null, response: null, response_latency_ms: null, judge: null };
+        if (!cur) cur = { prompt: null, response: null, response_latency_ms: null, response_ts: null, judge: null };
         cur.response = (e.content == null ? '' : e.content);
         cur.response_latency_ms = (e.latency_ms == null ? null : e.latency_ms);
+        // ADDITIVE: absolute ISO wall-clock time of the assistant message (same clock as
+        // answer_ts). Enables adoption latency = parse(answer_ts) - parse(final response_ts).
+        // Do NOT use response_latency_ms for this — it is a monotonic performance.now duration.
+        cur.response_ts = (e.ts == null ? null : e.ts);
       } else if (e.type === 'judge_result') {
-        if (!cur) cur = { prompt: null, response: null, response_latency_ms: null, judge: null };
+        if (!cur) cur = { prompt: null, response: null, response_latency_ms: null, response_ts: null, judge: null };
         // Last judge wins (the post-regeneration score is the meaningful final
         // state), but never lose an active-regen flag raised earlier in the turn.
         var prevRegen = cur.judge && cur.judge.active_regen;
@@ -87,12 +91,14 @@
       var e = evs[i];
       if (e.type === 'search_query') {
         flush();
-        cur = { query: (e.query == null ? '' : e.query), clicks: [] };
+        // ADDITIVE query_ts: search-arm "last results-page interaction" time (same wall clock).
+        cur = { query: (e.query == null ? '' : e.query), query_ts: (e.ts == null ? null : e.ts), clicks: [] };
       } else if (e.type === 'result_click') {
-        if (!cur) cur = { query: null, clicks: [] };
+        if (!cur) cur = { query: null, query_ts: null, clicks: [] };
         cur.clicks.push({
           title: e.title || '', url: e.url || '',
           index: (e.index == null ? null : e.index),
+          ts: (e.ts == null ? null : e.ts),   // ADDITIVE: click time (search-arm interaction timestamp)
           dwell_ms: null, fallback_clicked: false
         });
       } else if (e.type === 'result_dwell') {
@@ -126,6 +132,15 @@
     return d >= 0 ? d : null;
   }
 
+  // ADDITIVE: absolute ISO wall-clock time of answer submission (answer_final event), on the
+  // same clock as response_ts / query_ts. Adoption latency = parse(answer_ts) - parse(last tool ts).
+  function answerTs(evs) {
+    for (var i = evs.length - 1; i >= 0; i--) {
+      if (evs[i].type === 'answer_final') return evs[i].ts == null ? null : evs[i].ts;
+    }
+    return null;
+  }
+
   function consolidate(events, items, condition) {
     events = events || [];
     items  = items  || [];
@@ -145,6 +160,7 @@
         id: it.id, raw_id: it.raw_id, chart_id: it.chart_id,
         chart_type: it.chart_type, format: it.format, answer: it.answer,
         time_ms: questionTime(evs),
+        answer_ts: answerTs(evs),   // ADDITIVE (adoption latency)
         interaction: interaction
       };
     });
