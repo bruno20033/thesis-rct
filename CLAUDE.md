@@ -26,14 +26,18 @@ The **primary dependent variable** is unaided post-task accuracy — proportion 
 
 ## Confirmed technical parameters
 
-These were confirmed from `embed.html` source inspection (May 2025); the generator model was
-updated 2026-07-14 to reconcile with `methods.tex`'s stated model (was `openai/gpt-4o-mini`; see
-`PRELAUNCH_FAILURE_MODES.md`'s "Model IDs live and consistent with the pre-registration" item):
+These were confirmed from `embed.html` source inspection (May 2025). Generator model history:
+`openai/gpt-4o-mini` → `openai/gpt-5.5` (2026-07-14, to reconcile with `methods.tex`; see
+`PRELAUNCH_FAILURE_MODES.md`) → `anthropic/claude-sonnet-5` (2026-07-14, same day, for cost/speed —
+see commit history). **⚠ OPEN ISSUE:** the generator is now the same model family as the Judge
+(both Anthropic), which compromises the cross-family self-preference-bias mitigation described in
+the Judge row below (Wataoka et al. 2024). Not yet resolved — either swap the Judge to a
+non-Anthropic model, or accept and document the loss of that mitigation before pre-registration.
 
 | Parameter | Value | Notes |
 |---|---|---|
-| Generator model | `openai/gpt-5.5` | Locked for entire recruitment window once recruitment starts (not yet launched) |
-| Judge model | `anthropic/claude-haiku-4-5` | Cross-family: OpenAI generator, Anthropic judge (mitigates self-preference bias per Wataoka et al. 2024) |
+| Generator model | `anthropic/claude-sonnet-5` | Locked for entire recruitment window once recruitment starts (not yet launched). No reasoning param sent — extended thinking is opt-in/off by default for this model. |
+| Judge model | `anthropic/claude-haiku-4-5` | **Same family as generator as of 2026-07-14 — cross-family bias mitigation below no longer holds, see ⚠ above.** |
 | Judge fidelity threshold | ≥ 3 (5-point SOLO-inspired scale) | Relational level — asks probing question without revealing answer |
 | Judge mode | Passive | Fires after response is rendered; scores backfill asynchronously |
 | Judge temperature | 0.1 | Low variance for consistent scoring |

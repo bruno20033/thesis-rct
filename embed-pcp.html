@@ -344,7 +344,7 @@
   // never sees the key. Set PROXY_URL to your deployed Worker URL.
   // See worker.js + the README's "Backend proxy setup" section.
   var PROXY_URL     = 'https://thesis-llm-proxy.bruno-kneffel.workers.dev/';
-  var DEFAULT_MODEL = 'openai/gpt-5.5';
+  var DEFAULT_MODEL = 'anthropic/claude-sonnet-5';
 
   // System prompts for the two LLM arms. The Socratic prompt enforces
   // a probe-only scaffold — the assistant must never reveal or compute
@@ -968,11 +968,14 @@ Transferable reading principles, not instance answers. Deploy these **after** th
   /* ==================================================================
    * LLM-as-Judge fidelity layer (Socratic arm only)
    *
-   * Cross-family Judge: when the generator is OpenAI (gpt-5.5), the
-   * Judge defaults to Anthropic (Claude Haiku) to avoid same-family
-   * self-preference bias (Wataoka et al. 2024). One config constant
-   * lets you swap the Judge model without redeploying the worker
-   * (the worker forwards whatever `model` the embed sends).
+   * Cross-family Judge (COMPROMISED as of 2026-07-14): this layer was
+   * designed so the Judge (Anthropic Claude Haiku) is a different model
+   * family from the generator, avoiding same-family self-preference bias
+   * (Wataoka et al. 2024). The generator is now anthropic/claude-sonnet-5
+   * — SAME family as the Judge — so that mitigation no longer holds.
+   * Not yet resolved; see CLAUDE.md. One config constant lets you swap
+   * the Judge model without redeploying the worker (the worker forwards
+   * whatever `model` the embed sends).
    *
    * RCT_JUDGE_MODE controls behaviour:
    *   'passive' — Judge fires after the assistant message renders, in
@@ -989,7 +992,7 @@ Transferable reading principles, not instance answers. Deploy these **after** th
    * ================================================================== */
   var RCT_JUDGE_PROXY_URL  = (typeof PROXY_URL === 'string' ? PROXY_URL : '').replace(/\/+$/, '') + '/judge';
   var RCT_JUDGE_MODE       = 'passive';                     // 'passive' | 'active' | 'off'
-  var RCT_JUDGE_MODEL      = 'anthropic/claude-haiku-4-5';  // cross-family from default openai/gpt-5.5 generator
+  var RCT_JUDGE_MODEL      = 'anthropic/claude-haiku-4-5';  // SAME FAMILY as default generator anthropic/claude-sonnet-5 -- cross-family mitigation compromised, see note above
   var RCT_JUDGE_THRESHOLD  = 3;                             // fidelity score below this is "failing"
   var RCT_JUDGE_TIMEOUT_MS = 8000;                          // per-call hard timeout
 
@@ -2308,10 +2311,13 @@ Transferable reading principles, not instance answers. Deploy these **after** th
       var res = await fetch(PROXY_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // reasoning.effort pinned to 'low': gpt-5.5 defaults reasoning ON at
-        // 'medium' effort, which adds latency participants would feel on
-        // every turn. Ignored by non-reasoning models if MODEL is overridden.
-        body: JSON.stringify({ model: modelId, messages: messages, reasoning: { effort: 'low' } })
+        // No reasoning param: anthropic/claude-sonnet-5 has extended
+        // thinking OFF by default (opt-in only), unlike gpt-5.5 which
+        // defaulted reasoning ON. Sending reasoning.effort here would
+        // actively *enable* thinking that otherwise wouldn't run --
+        // the opposite of what we want. If MODEL is ever swapped back to
+        // a reasoning-on-by-default model, re-add reasoning: { effort: 'low' }.
+        body: JSON.stringify({ model: modelId, messages: messages })
       });
       var data = null;
       try { data = await res.json(); } catch (_) { /* parse failed */ }
