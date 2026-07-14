@@ -26,11 +26,13 @@ The **primary dependent variable** is unaided post-task accuracy — proportion 
 
 ## Confirmed technical parameters
 
-These were confirmed from `embed.html` source inspection (May 2025):
+These were confirmed from `embed.html` source inspection (May 2025); the generator model was
+updated 2026-07-14 to reconcile with `methods.tex`'s stated model (was `openai/gpt-4o-mini`; see
+`PRELAUNCH_FAILURE_MODES.md`'s "Model IDs live and consistent with the pre-registration" item):
 
 | Parameter | Value | Notes |
 |---|---|---|
-| Generator model | `openai/gpt-4o-mini` | Locked for entire recruitment window |
+| Generator model | `openai/gpt-5.5` | Locked for entire recruitment window once recruitment starts (not yet launched) |
 | Judge model | `anthropic/claude-haiku-4-5` | Cross-family: OpenAI generator, Anthropic judge (mitigates self-preference bias per Wataoka et al. 2024) |
 | Judge fidelity threshold | ≥ 3 (5-point SOLO-inspired scale) | Relational level — asks probing question without revealing answer |
 | Judge mode | Passive | Fires after response is rendered; scores backfill asynchronously |
