@@ -26,18 +26,32 @@ The **primary dependent variable** is unaided post-task accuracy — proportion 
 
 ## Confirmed technical parameters
 
-These were confirmed from `embed.html` source inspection (May 2025). Generator model history:
-`openai/gpt-4o-mini` → `openai/gpt-5.5` (2026-07-14, to reconcile with `methods.tex`; see
-`PRELAUNCH_FAILURE_MODES.md`) → `anthropic/claude-sonnet-5` (2026-07-14, same day, for cost/speed —
-see commit history). **⚠ OPEN ISSUE:** the generator is now the same model family as the Judge
-(both Anthropic), which compromises the cross-family self-preference-bias mitigation described in
-the Judge row below (Wataoka et al. 2024). Not yet resolved — either swap the Judge to a
-non-Anthropic model, or accept and document the loss of that mitigation before pre-registration.
+These were confirmed from `embed.html` source inspection (May 2025). Generator model history, all
+2026-07-14: `openai/gpt-4o-mini` → `openai/gpt-5.5` (reconcile with `methods.tex`; see
+`PRELAUNCH_FAILURE_MODES.md`) → `anthropic/claude-sonnet-5` (cost/speed; briefly same-family as the
+Judge, see commit history) → `openai/gpt-5.4` (further cost/speed tuning; also restores cross-family
+Judge separation from Claude Sonnet 5). No reasoning param is sent for either OpenAI or Anthropic
+generator choices tried so far, since all had `reasoning.default_enabled = false` on OpenRouter —
+**verify this on any future model swap** before assuming it's safe to omit (or re-add) that param.
+
+**Socratic prompt history, same day:** the original TAOS ("Talent-Augmenting OS") prompt was
+replaced after live batch-testing found `openai/gpt-5.4` violated an explicit Red Line
+("never say you don't have the user's profile / never say 'assess me'") in **9/10** replications,
+verbatim, every time -- almost certainly the model pattern-matching the prompt's elaborate
+"Load User Profile" framing against a generic custom-GPT onboarding template it had seen in
+training, overriding the explicit instruction not to. Replaced with a much shorter prompt based on
+OpenAI's own published canonical Socratic-tutor system prompt (no "profile" concept at all), with
+the operational chart Red Lines (never state a value, never confirm correctness, never confirm
+chart type, etc.) and the PCP transferable-reading-principles library layered back on top. Re-run
+of the same 10-replication batch against `gpt-5.4` with the new prompt: **0/10 violations**. New
+prompt is ~3.5k chars vs. the old ~15.3k (also cuts generator prompt-token cost roughly 4-5x).
+Old TAOS prompt text is preserved in git history (see the commit that introduced it, `9e3515e`, and
+the commit prior to this replacement) if it's ever needed again.
 
 | Parameter | Value | Notes |
 |---|---|---|
-| Generator model | `anthropic/claude-sonnet-5` | Locked for entire recruitment window once recruitment starts (not yet launched). No reasoning param sent — extended thinking is opt-in/off by default for this model. |
-| Judge model | `anthropic/claude-haiku-4-5` | **Same family as generator as of 2026-07-14 — cross-family bias mitigation below no longer holds, see ⚠ above.** |
+| Generator model | `openai/gpt-5.4` | Locked for entire recruitment window once recruitment starts (not yet launched). No reasoning param sent (`reasoning.default_enabled = false` confirmed via OpenRouter models API). |
+| Judge model | `anthropic/claude-haiku-4-5` | Cross-family: OpenAI generator, Anthropic judge (mitigates self-preference bias per Wataoka et al. 2024). Restored 2026-07-14 after a same-day same-family excursion via claude-sonnet-5. |
 | Judge fidelity threshold | ≥ 3 (5-point SOLO-inspired scale) | Relational level — asks probing question without revealing answer |
 | Judge mode | Passive | Fires after response is rendered; scores backfill asynchronously |
 | Judge temperature | 0.1 | Low variance for consistent scoring |
