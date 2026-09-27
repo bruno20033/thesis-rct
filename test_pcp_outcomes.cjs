@@ -53,7 +53,7 @@ after(async () => {
 });
 
 async function openTest(t, block, lang = 'EN', mobile = false) {
-  const context = await browser.newContext({ viewport: mobile ? {width:390,height:844} : {width:1100,height:900} });
+  const context = await browser.newContext({ viewport: mobile ? {width:390,height:844} : {width:1100,height:900}, hasTouch: mobile });
   t.after(() => context.close());
   const page = await context.newPage();
   const errors = [], requests = [];
@@ -72,6 +72,17 @@ async function openTest(t, block, lang = 'EN', mobile = false) {
 async function currentItem(frame) {
   const src = await frame.locator('#chart-area img').getAttribute('src');
   return items.find(it => src === `charts/${it.chartId}.png`);
+}
+
+function confidenceField(block) { return block === 'posttest1' ? 'confidence_rating' : 'confidence_pct'; }
+function confidenceButton(frame, block) { return frame.locator(block === 'posttest1' ? '#btn-confidence' : '#btn-next'); }
+async function chooseConfidence(frame, block, value) {
+  if (block === 'posttest1') {
+    const slider = frame.locator('#confidence-slider');
+    await slider.focus();
+    await slider.press('Home');
+    for (let n = 1; n < value; n++) await slider.press('ArrowRight');
+  } else await frame.locator(`input[name="confidence"][value="${value}"]`).check();
 }
 
 for (const block of ['posttest1', 'posttest2']) {
@@ -104,8 +115,19 @@ for (const block of ['posttest1', 'posttest2']) {
         assert.equal(await frame.locator('#confidence-panel').isVisible(), true);
         assert.equal(await frame.locator('#confidence-question').textContent(), lang === 'DE'
           ? 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?' : 'How confident are you that your answer is correct?');
-        assert.equal(await frame.locator('#btn-next').isDisabled(), true, 'no default confidence');
+        assert.equal(await confidenceButton(frame, block).isDisabled(), true, 'no default confidence');
         assert.equal(await frame.locator('input[name="confidence"]:checked').count(), 0);
+        if (block === 'posttest1') {
+          assert.equal(await frame.locator('#confidence-panel').evaluate(el => el.tagName === 'DIALOG' && el.open), true);
+          const slider = frame.locator('#confidence-slider');
+          assert.equal(await slider.getAttribute('min'), '1');
+          assert.equal(await slider.getAttribute('max'), '7');
+          assert.equal(await slider.getAttribute('step'), '1');
+          assert.equal(await slider.getAttribute('aria-valuetext'), lang === 'DE' ? 'Noch keine Bewertung ausgewählt' : 'No rating selected');
+          assert.equal(await frame.locator('#confidence-low').innerText(), lang === 'DE' ? 'Überhaupt nicht sicher' : 'Not at all confident');
+          assert.equal(await frame.locator('#confidence-high').innerText(), lang === 'DE' ? 'Sehr sicher' : 'Very confident');
+          assert.equal(await frame.locator('#confidence-panel').evaluate(el => el.scrollWidth <= el.clientWidth), true);
+        }
         assert.equal(await frame.locator('.option input:not(:disabled)').count(), 0, 'answer is locked');
         assert.equal(await frame.locator('#timer').isVisible(), false);
         if (i === 0) {
@@ -117,10 +139,10 @@ for (const block of ['posttest1', 'posttest2']) {
           await page.clock.runFor(95000);
           assert.equal(await frame.locator('#q-current').textContent(), '1');
         }
-        const confidence = i === 0 ? 0 : i === 1 ? 100 : 60;
+        const confidence = block === 'posttest1' ? (i === 0 ? 1 : i === 1 ? 7 : 4) : (i === 0 ? 0 : i === 1 ? 100 : 60);
         await page.clock.runFor(2400);
-        await frame.locator(`input[name="confidence"][value="${confidence}"]`).check();
-        await frame.locator('#btn-next').click();
+        await chooseConfidence(frame, block, confidence);
+        await confidenceButton(frame, block).click();
         assert.equal(await frame.locator('#q-current').textContent(), String(Math.min(i + 2, 16)));
         if (i < 15) assert.equal(await frame.evaluate(() => document.activeElement.id), 'question-progress');
       }
@@ -136,9 +158,13 @@ for (const block of ['posttest1', 'posttest2']) {
       assert.deepEqual(data.map(r => r.id), seen);
       assert.deepEqual(data.map(r => r.answer), chosen);
       data.forEach((r, i) => {
-        assert.equal(r.confidence_pct, i === 0 ? 0 : i === 1 ? 100 : 60);
+        assert.equal(r[confidenceField(block)], block === 'posttest1' ? (i === 0 ? 1 : i === 1 ? 7 : 4) : (i === 0 ? 0 : i === 1 ? 100 : 60));
+        if (block === 'posttest1') {
+          assert.equal(r.confidence_scale, '1-7');
+          assert.equal('confidence_pct' in r, false, 'do not encode an ordinal rating as a percentage');
+        }
         assert.equal(r.timeout, false);
-        assert.equal(r.response_format, 'best_answer_confidence_v1');
+        assert.equal(r.response_format, block === 'posttest1' ? 'best_answer_confidence_likert7_v1' : 'best_answer_confidence_v1');
         assert.ok(r.rt_ms >= 1200 && r.rt_ms < 3000, 'answer RT excludes confidence');
         assert.ok(r.confidence_rt_ms >= (i === 0 ? 97400 : 2400));
       });
@@ -150,7 +176,7 @@ for (const block of ['posttest1', 'posttest2']) {
       assert.equal(complete.attempted, 16);
       assert.equal(scoreResponses(data).accuracy, 0.5);
       assert.equal(scoreBlock(complete.embeddedData, block).accuracy, 0.5);
-      const withoutConfidence = data.map(({confidence_pct, confidence_rt_ms, response_format, ...legacy}) => legacy);
+      const withoutConfidence = data.map(({confidence_pct, confidence_rating, confidence_scale, confidence_rt_ms, response_format, ...legacy}) => legacy);
       assert.deepEqual(scoreResponses(data), scoreResponses(withoutConfidence), 'confidence cannot change accuracy');
       assert.equal(await frame.locator('#complete-screen').isVisible(), true);
       // Repeated / stale UI submissions must not create another record or completion.
@@ -173,7 +199,7 @@ for (const block of ['posttest1', 'posttest2']) {
     records.forEach(r => {
       assert.equal(r.answer, 'timeout');
       assert.equal(r.timeout, true);
-      assert.equal(r.confidence_pct, null);
+      assert.equal(r[confidenceField(block)], null);
       assert.equal(r.confidence_rt_ms, null);
       assert.ok(r.rt_ms >= 90000);
     });
@@ -189,18 +215,17 @@ for (const block of ['posttest1', 'posttest2']) {
     assert.equal(await frame.locator('#btn-next').isEnabled(), true);
     await frame.locator('#btn-next').click();
     const selected = await frame.locator('.option.selected').getAttribute('data-value');
-    await frame.evaluate(() => {
+    await frame.evaluate(block => {
       selectOption(document.querySelectorAll('.option')[1]);
-      [-10, 101, '', null, NaN, 15].forEach(value => selectConfidence(value));
+      (block === 'posttest1' ? [-10, 0, 8, 101, '', null, NaN, 1.5] : [-10, 101, '', null, NaN, 15]).forEach(value => selectConfidence(value));
       submitAnswer();
-    });
+    }, block);
     assert.equal(await frame.locator('.option.selected').getAttribute('data-value'), selected);
     assert.equal(await frame.locator('#q-current').textContent(), '1');
-    assert.equal(await frame.locator('#btn-next').isDisabled(), true);
-    await frame.locator('input[name="confidence"][value="0"]').focus();
-    await page.keyboard.press('Space');
-    assert.equal(await frame.locator('#btn-next').isEnabled(), true);
-    await frame.locator('#btn-next').click();
+    assert.equal(await confidenceButton(frame, block).isDisabled(), true);
+    await chooseConfidence(frame, block, block === 'posttest1' ? 1 : 0);
+    assert.equal(await confidenceButton(frame, block).isEnabled(), true);
+    await confidenceButton(frame, block).click();
     assert.equal(await frame.locator('#q-current').textContent(), '2');
     assert.equal(await frame.locator('#btn-next').isDisabled(), true);
     assert.equal(await frame.locator('input[name="confidence"]:checked').count(), 0);
@@ -212,25 +237,77 @@ for (const block of ['posttest1', 'posttest2']) {
     const it = await currentItem(frame);
     await frame.locator(`.option[data-value="${PCP_KEY[it.id]}"] input`).check();
     await frame.locator('#btn-next').click();
-    await frame.locator('input[name="confidence"][value="0"]').check();
-    await frame.locator('#btn-next').click();
+    await chooseConfidence(frame, block, block === 'posttest1' ? 1 : 0);
+    await confidenceButton(frame, block).click();
     // The next item's unconfirmed selection must not inherit that confidence.
     await frame.locator('.option input').first().check();
     for (let i = 2; i < 16; i++) await page.clock.runFor(90000);
     await page.waitForFunction(() => writes.length === 1, null, {polling:50});
     const records = await page.evaluate(() => JSON.parse(writes[0].value));
     assert.equal(records[1].id, it.id);
-    assert.equal(records[1].confidence_pct, 0);
+    assert.equal(records[1][confidenceField(block)], block === 'posttest1' ? 1 : 0);
     assert.equal(records[1].timeout, false);
     records.filter((_, i) => i !== 1).forEach(r => {
       assert.equal(r.answer, 'timeout');
-      assert.equal(r.confidence_pct, null);
+      assert.equal(r[confidenceField(block)], null);
       assert.equal(r.confidence_rt_ms, null);
     });
     assert.equal(scoreResponses(records).missing, 15);
     assert.equal(scoreResponses(records).accuracy, 0.063);
   });
 }
+
+test('immediate confidence modal: midpoint requires a deliberate choice; focus stays in the pop-up', async t => {
+  const {page, frame} = await openTest(t, 'posttest1');
+  await frame.locator('.option input').first().check();
+  await frame.locator('#btn-next').click();
+  const dialog = frame.locator('#confidence-panel');
+  const slider = frame.locator('#confidence-slider');
+  assert.equal(await dialog.evaluate(el => el.open), true);
+  assert.equal(await frame.locator('#btn-confidence').isDisabled(), true);
+  await page.keyboard.press('Escape');
+  assert.equal(await dialog.evaluate(el => el.open), true, 'confidence cannot be skipped');
+  await slider.focus();
+  assert.equal(await frame.locator('#btn-confidence').isDisabled(), true, 'focus alone is not a response');
+  await slider.click(); // Deliberately select the midpoint, even without moving the native thumb.
+  assert.equal(await slider.inputValue(), '4');
+  assert.equal(await frame.locator('#confidence-value').innerText(), '4 / 7');
+  assert.equal(await frame.locator('#btn-confidence').isEnabled(), true);
+  await slider.press('Tab');
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'btn-confidence');
+  await page.keyboard.press('Tab');
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'confidence-slider');
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await frame.evaluate(() => document.activeElement.id), 'btn-confidence');
+  await page.keyboard.press('Enter');
+  assert.equal(await dialog.evaluate(el => el.open), false);
+  assert.equal(await frame.locator('#q-current').textContent(), '2');
+  await frame.locator('.option input').first().check();
+  await frame.locator('#btn-next').click();
+  assert.equal(await slider.getAttribute('aria-valuetext'), 'No rating selected');
+  assert.equal(await frame.locator('#btn-confidence').isDisabled(), true);
+});
+
+test('immediate mobile slider accepts touch at both endpoints and posts raw 1–7 ratings', async t => {
+  const {page, frame} = await openTest(t, 'posttest1', 'EN', true);
+  let count = 0;
+  for (const rating of [7, 1]) {
+    await frame.locator('.option input').first().check();
+    await frame.locator('#btn-next').click();
+    const slider = frame.locator('#confidence-slider');
+    const box = await slider.boundingBox();
+    await slider.tap({position:{x:rating === 1 ? 1 : box.width - 1, y:box.height / 2}});
+    assert.equal(await slider.inputValue(), String(rating));
+    assert.equal(await frame.locator('#confidence-value').innerText(), `${rating} / 7`);
+    await frame.locator('#btn-confidence').click();
+    await page.waitForFunction(n => messages.filter(m=>m.type==='pcp_item_response').length === n, ++count, {polling:50});
+    const response = await page.evaluate(() => messages.filter(m=>m.type==='pcp_item_response').at(-1));
+    assert.equal(response.confidence_rating, rating);
+    assert.equal(response.confidence_scale, '1-7');
+    assert.equal(response.response_format, 'best_answer_confidence_likert7_v1');
+    assert.equal('confidence_pct' in response, false);
+  }
+});
 
 test('legacy abstentions retain their original offline classification', () => {
   const data = items.filter(it => it.block === 'posttest1').map(it => ({id:it.id, answer:PCP_OMIT[it.id], timeout:false}));
