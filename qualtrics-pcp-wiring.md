@@ -48,7 +48,11 @@ Show: PCP Delayed post-test
 **Delayed post-test = a second session** — the one piece still needing a decision:
 platform (Prolific longitudinal re-invite vs email), interval (e.g. 7 days),
 reminder schedule, attrition handling. The `qualtrics-pcp-posttest2.html` renderer
-itself is ready and identical in behaviour to posttest 1.
+retains the existing 0–100% inline confidence procedure. The immediate test now
+uses a modal 1–7 slider (1 = Not at all confident; 7 = Very confident). Both retain
+16 best-answer items and a separate, untimed confidence step; see
+`OUTCOME_CONFIDENCE.md` for response formats. The existing bridge passes through
+the new immediate JSON fields without a Qualtrics edit.
 
 ## Embedded Data — one field per phase (reuses existing fields)
 
