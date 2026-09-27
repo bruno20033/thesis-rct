@@ -27,8 +27,9 @@
  *   interaction (NOAID/null) = null
  *
  *   judge = null  (Unrestricted arm: no Judge layer)
- *         | { fidelity, intent, status, active_regen,
- *             fidelity_reasoning, intent_reasoning, latency_ms }
+ *         | { fidelity, intent, usefulness, status, active_regen,
+ *             fidelity_reasoning, intent_reasoning, usefulness_reasoning,
+ *             latency_ms }
  *
  * The shape is arm-agnostic: Unrestricted simply has judge:null on every turn
  * (no judge_result events exist), so one parser scores every arm.
@@ -45,10 +46,12 @@
     return {
       fidelity:           (e.fidelity_score == null ? null : e.fidelity_score),
       intent:             (e.intent_score   == null ? null : e.intent_score),
+      usefulness:         (e.usefulness_score == null ? null : e.usefulness_score),
       status:             e.judge_status || null,
       active_regen:       !!(e.active_regen_triggered || e.is_regen_score),
       fidelity_reasoning: e.fidelity_reasoning || null,
       intent_reasoning:   e.intent_reasoning   || null,
+      usefulness_reasoning: e.usefulness_reasoning || null,
       latency_ms:         (e.judge_latency_ms == null ? null : e.judge_latency_ms)
     };
   }
@@ -159,6 +162,7 @@
       return {
         id: it.id, raw_id: it.raw_id, chart_id: it.chart_id,
         chart_type: it.chart_type, format: it.format, answer: it.answer,
+        reflection: it.reflection || null,
         time_ms: questionTime(evs),
         answer_ts: answerTs(evs),   // ADDITIVE (adoption latency)
         interaction: interaction

@@ -11,7 +11,7 @@ The hypothesis is **cognitive offloading**: when participants delegate the reaso
 | Arm | Purpose | URL params | Treatment |
 |---|---|---|---|
 | **SEARCH** | Active control | `?condition=SEARCH` | Real Google web search panel (Serper.dev API). No LLM. |
-| **LLM-Socratic** | Scaffolded LLM | `?condition=LLM&arm=socratic` | Probe-only system prompt; never reveals answer. Every turn judged by a second LLM for Socratic fidelity. |
+| **LLM-Socratic** | Scaffolded LLM | `?condition=LLM&arm=socratic` | Concise, progressive system prompt; never reveals the target answer. Every turn is judged for fidelity, intent, and usefulness. |
 | **LLM-Unrestricted** | Unscaffolded LLM | `?condition=LLM&arm=unrestricted` | Generally-helpful system prompt. May answer directly. No Judge layer. |
 
 The study has three research questions:
@@ -22,7 +22,7 @@ The study has three research questions:
 | **RQ2** | Productivity | Does LLM access improve task performance during practice? | Proportion correct on aided practice block |
 | **H3** | Dissociation | Does the arm that performs best during practice perform worst on the unaided test? | Interaction between arm and block (aided vs unaided) |
 
-The **primary dependent variable** is unaided post-task accuracy — proportion of correct responses on held-out chart-reading items administered immediately after tool withdrawal. **Secondary outcomes** include assisted-phase accuracy (productivity), delayed post-test accuracy (retention), mean time per question, NASA-TLX cognitive load, and self-reported confidence. **Process measures** include turn count, token count, search query count, time-on-task, and — for the Socratic arm — per-turn Judge-scored fidelity and intent scores.
+The **primary dependent variable** is unaided post-task accuracy — proportion of correct responses on held-out chart-reading items administered immediately after tool withdrawal. **Secondary outcomes** include assisted-phase accuracy (productivity), delayed post-test accuracy (retention), mean time per question, NASA-TLX cognitive load, and self-reported confidence. **Process measures** include turn count, token count, search query count, time-on-task, and — for the Socratic arm — per-turn Judge-scored fidelity, intent, and pedagogical usefulness.
 
 ## Confirmed technical parameters
 
@@ -302,7 +302,7 @@ Main text carries the "why" and interpretively important content. Tedious implem
 ## What's still TODO
 
 ### Experiment implementation
-- **Judge calibration.** Run two human coders against the 10 synthetic examples in `rct_judge_prompts.md` plus ~20 real pilot turns. Compute Cohen's κ between Judge and consensus. Targets: fidelity κ ≥ 0.75, intent κ ≥ 0.70. Log results in `rct_judge_prompts.md` → `## Calibration log`.
+- **Judge calibration.** Run two human coders against the 12 synthetic examples in `rct_judge_prompts.md` plus ~20 real pilot turns. Compute Cohen's κ between Judge and consensus. Targets: fidelity κ ≥ 0.75, intent κ ≥ 0.70, usefulness κ ≥ 0.70. Log results in `rct_judge_prompts.md` → `## Calibration log`.
 - **OpenRouter spend caps** on both the generator and Judge keys.
 - **Pilot N=5–10** before opening the full trial — verify CSV export, Embedded Data shape, and the Socratic prompt's robustness against participant extraction attempts in the wild.
 - **Qualtrics CSV export verification** — confirm `InteractionLog` is one parseable JSON column and the per-turn flat fields (`prompt_1..20`, `response_1..20`, `judge_fidelity_1..20`, etc.) are populated.

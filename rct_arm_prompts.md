@@ -83,7 +83,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
 - When using a general principle, apply at most one as a scaffold without interpreting the target item for the participant.
 ```
 
-Both runtimes use this identical Socratic policy. The PCP knowledge appears in the shared prefix, not exclusively in this arm.
+Both runtimes use this identical Socratic policy. The PCP knowledge appears in the shared prefix, not exclusively in this arm. The Judge separately scores fidelity, participant intent, and pedagogical usefulness.
 
 ### Chart active-mode reinforcement template
 

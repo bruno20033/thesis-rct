@@ -1,4 +1,4 @@
-name: PCP outcome regression tests
+name: PCP regression tests
 
 on:
   pull_request:
@@ -8,6 +8,12 @@ on:
       - 'pcp_items*.js'
       - 'pcp_scor*.js'
       - 'test_pcp_outcomes.cjs'
+      - 'test_pcp_training.cjs'
+      - 'embed-pcp.html'
+      - 'pcp_training_extension.js'
+      - 'pcp_consolidate.js'
+      - 'qualtrics-pcp-train-js.js'
+      - 'charts/pcp_*.png'
       - 'package*.json'
       - '.github/workflows/pcp-outcomes.yml'
   push:
@@ -18,6 +24,12 @@ on:
       - 'pcp_items*.js'
       - 'pcp_scor*.js'
       - 'test_pcp_outcomes.cjs'
+      - 'test_pcp_training.cjs'
+      - 'embed-pcp.html'
+      - 'pcp_training_extension.js'
+      - 'pcp_consolidate.js'
+      - 'qualtrics-pcp-train-js.js'
+      - 'charts/pcp_*.png'
       - 'package*.json'
       - '.github/workflows/pcp-outcomes.yml'
   workflow_dispatch:
@@ -38,4 +50,5 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run test:outcomes
+      - run: node --test test_pcp_training.cjs
       - run: node pcp_score.js --test

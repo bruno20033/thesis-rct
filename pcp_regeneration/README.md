@@ -1,0 +1,84 @@
+# High-resolution PCP stimulus regeneration
+
+This directory is the reproducible replacement pipeline for the 40
+parallel-coordinates-plot (PCP) stimuli used in the experiment.  It is
+deliberately separate from `../charts/`: the original stimuli must not be
+silently overwritten before each replacement has passed an item-level
+measurement-equivalence review.
+
+## Why this exists
+
+The trial used lossless crops of the BTPL assessment PDFs.  The PDFs embed
+low-resolution raster screenshots, so increasing their PDF render DPI cannot
+improve the underlying chart detail.  `regenerate.py` recreates source-verified
+charts from the underlying open data and writes both vector SVG and 3x PNG
+fallbacks.
+
+## Provenance
+
+The input assessment was the BTPL instrument:
+
+- https://github.com/vis-graphics/ml-pcp-literacy (CC BY-NC-SA 4.0)
+- Srinivas et al. (2025), *Mastery Learning Improves Performance on Complex
+  Tasks on PCP Literacy Test*, arXiv:2506.10164
+
+The data sources used for the first source-derived reconstruction set are pinned in
+`sources.json`.  Their field names and row counts are validated by the script.
+The historical P-Lite paper (Firat et al., 2022, Table 4) is the source ledger
+for the original Car, Cereal, Coal Disaster, US Election and US Population
+data.  It also documents that the original test images were produced with
+several different PCP tools, and that axis ranges / order were sometimes
+modified.  Consequently a matching source dataset alone does **not** prove a
+replacement item is equivalent.
+
+## Run
+
+```bash
+python regenerate.py
+```
+
+This downloads only open data into `data/` (which is ignored), then writes
+source-derived candidate replacements to `out/{svg,png}/` and a `validation.json`
+ledger.  It never writes into `../charts/`.
+
+## Release gate
+
+Do not deploy a regenerated image until all four checks have a documented
+PASS:
+
+1. dataset identity and row count;
+2. axis names, order, direction and range;
+3. filters, selections, colour encoding and any intentional fault;
+4. answer-key equivalence, independently checked against the original item.
+
+The old PNG remains the canonical deployed asset for every item until that
+gate is complete.
+
+`validation.json` also contains a small `answer_logic_audit`. It asserts the
+recoverable facts that matter for the revised car-selection, college-ranking,
+college-filter and Coal Disaster items. It deliberately does **not** certify
+the remaining visual or semantic equivalence claims.
+
+## Provenance distinction
+
+Thirty-four currently generated items are source-pinned candidates: the input
+table is pinned and validated in `sources.json`. This verifies their public
+data provenance, but not yet the original's row selection, chart transformation
+or measurement equivalence. Six others are high-resolution,
+deterministic structural redraws of assessment illustrations whose original
+tables were not included in the public BTPL release. They are identified under
+`structural_reconstructions` in `out/validation.json` and **must not** replace
+the study asset until the study authors provide the tables or confirm
+measurement equivalence.
+
+See [SOURCE_RECOVERY.md](SOURCE_RECOVERY.md) for the public-source audit and
+the exact material needed to clear those six items.
+
+### Recovered transformation: Coal Disaster / `pcp_und_sa_3`
+
+The cited Xmdv archive has 191 rows. The eight rows whose `Interval` is greater
+than 826 or `Deaths` is greater than 344 cannot be present in the deployed
+chart: removing them produces its exact visible upper bounds. The remaining 181
+records are rendered using the printed padded domains (Month 0–13, Year
+1850–1962, Day of Year 0–365, Interval 0–826 and Deaths 9–344). This is a
+recoverable display/filter transformation, not a change to the source data.

@@ -67,7 +67,7 @@ by the Randomizer):
 
 | Phase | Field reused | Holds |
 |---|---|---|
-| Aided practice (Slots 1 & 2) | `vlat_train_responses` | one dict per question — answer + that question's interaction (LLM `turns[]`+judge / SEARCH `searches[]`+clicks) |
+| Aided practice (Slots 1 & 2) | `vlat_train_responses` | 16 dicts — answer + that question's interaction (LLM `turns[]`+judge / SEARCH `searches[]`+clicks). The final four training items also include reflection mode/text. |
 | Immediate post-test (Slot 3) | `vlat_post_responses` | one dict per item — `{id, chart_id, format, answer, rt_ms, timeout}` |
 | Delayed post-test (Slot 4, separate survey) | `vlat_post_responses` | same shape, in that survey's own namespace |
 

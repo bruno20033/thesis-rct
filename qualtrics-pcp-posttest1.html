@@ -241,8 +241,9 @@
     elProgressFill.style.width = ((currentIndex / items.length) * 100) + '%';
 
     // Chart image (axis titles + chart; prompt & options cropped off — the prompt is
-    // shown as separate text below). alt = chart type.
-    var alt = item.chartType || 'chart';
+    // shown as separate text below). Do not disclose the chart type in alt text
+    // or the missing-image placeholder: some items ask participants to identify it.
+    var alt = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var imgPath = 'charts/' + item.chartId + '.png';
     elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escAttr(alt) + '" ' +
       'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' + escHtml(alt) +

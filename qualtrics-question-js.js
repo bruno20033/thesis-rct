@@ -68,6 +68,7 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         Q.setEmbeddedData(pfx + 'session_id',      log.session_id || '');
         // arm: 'socratic' | 'unrestricted' for LLM condition; '' for SEARCH.
         Q.setEmbeddedData('arm',             log.arm || '');
+        Q.setEmbeddedData('socratic_prompt_version', log.socratic_prompt_version || '');
         // Judge metadata (Socratic arm only — empty for other arms).
         Q.setEmbeddedData(pfx + 'judge_model',         log.judge_model || '');
         Q.setEmbeddedData(pfx + 'judge_mode',          log.judge_mode  || '');
@@ -141,8 +142,10 @@ Qualtrics.SurveyEngine.addOnReady(function () {
           // passive mode, or non-Socratic arm).
           Q.setEmbeddedData('judge_fidelity_'           + k, j && j.fidelity_score != null ? String(j.fidelity_score) : '');
           Q.setEmbeddedData('judge_intent_'             + k, j && j.intent_score   != null ? String(j.intent_score)   : '');
+          Q.setEmbeddedData('judge_usefulness_'         + k, j && j.usefulness_score != null ? String(j.usefulness_score) : '');
           Q.setEmbeddedData('judge_fidelity_reasoning_' + k, j ? String(j.fidelity_reasoning || '').slice(0, 300) : '');
           Q.setEmbeddedData('judge_intent_reasoning_'   + k, j ? String(j.intent_reasoning   || '').slice(0, 300) : '');
+          Q.setEmbeddedData('judge_usefulness_reasoning_' + k, j ? String(j.usefulness_reasoning || '').slice(0, 300) : '');
           Q.setEmbeddedData('judge_status_'             + k, j ? (j.judge_status || '') : '');
           Q.setEmbeddedData('judge_latency_ms_'         + k, j && j.judge_latency_ms != null ? String(j.judge_latency_ms) : '');
           Q.setEmbeddedData('judge_active_regen_'       + k, j ? String(!!j.active_regen_triggered) : '');
@@ -177,11 +180,16 @@ Qualtrics.SurveyEngine.addOnReady(function () {
         var okJudgements = judgements.filter(function (x) { return x.judge_status === 'ok' && typeof x.fidelity_score === 'number'; });
         var fidelitySum  = okJudgements.reduce(function (s, x) { return s + x.fidelity_score; }, 0);
         var fidelityMin  = okJudgements.reduce(function (m, x) { return m == null || x.fidelity_score < m ? x.fidelity_score : m; }, null);
+        var usefulJudgements = okJudgements.filter(function (x) { return typeof x.usefulness_score === 'number'; });
+        var usefulnessSum = usefulJudgements.reduce(function (s, x) { return s + x.usefulness_score; }, 0);
+        var usefulnessMin = usefulJudgements.reduce(function (m, x) { return m == null || x.usefulness_score < m ? x.usefulness_score : m; }, null);
         var belowThreshold = okJudgements.filter(function (x) { return x.fidelity_score < 3; }).length;
         var extractionAttempts = okJudgements.filter(function (x) { return x.intent_score === 1 || x.intent_score === 2; }).length;
         var totalJudgeLatency  = judgements.reduce(function (s, x) { return s + (x.judge_latency_ms || 0); }, 0);
         Q.setEmbeddedData('judge_avg_fidelity',             okJudgements.length ? String((fidelitySum / okJudgements.length).toFixed(2)) : '');
         Q.setEmbeddedData('judge_min_fidelity',             fidelityMin != null ? String(fidelityMin) : '');
+        Q.setEmbeddedData('judge_avg_usefulness',           usefulJudgements.length ? String((usefulnessSum / usefulJudgements.length).toFixed(2)) : '');
+        Q.setEmbeddedData('judge_min_usefulness',           usefulnessMin != null ? String(usefulnessMin) : '');
         Q.setEmbeddedData('judge_below_threshold_count',    String(belowThreshold));
         Q.setEmbeddedData('judge_extraction_attempt_count', String(extractionAttempts));
         Q.setEmbeddedData('judge_total_latency_ms',         String(totalJudgeLatency));
@@ -390,6 +398,8 @@ Qualtrics.SurveyEngine.addOnReady(function () {
               fidelity_reasoning: e.fidelity_reasoning != null ? e.fidelity_reasoning : '',
               intent_score:       e.intent_score       != null ? e.intent_score       : null,
               intent_reasoning:   e.intent_reasoning   != null ? e.intent_reasoning   : '',
+              usefulness_score:   e.usefulness_score   != null ? e.usefulness_score   : null,
+              usefulness_reasoning: e.usefulness_reasoning != null ? e.usefulness_reasoning : '',
               judge_status:       e.judge_status       != null ? e.judge_status       : '',
               judge_latency_ms:   e.judge_latency_ms   != null ? e.judge_latency_ms   : null
             };
@@ -404,6 +414,8 @@ Qualtrics.SurveyEngine.addOnReady(function () {
           entry.judge_fidelity_reasoning = t.judge.fidelity_reasoning;
           entry.judge_intent_score       = t.judge.intent_score;
           entry.judge_intent_reasoning   = t.judge.intent_reasoning;
+          entry.judge_usefulness_score   = t.judge.usefulness_score;
+          entry.judge_usefulness_reasoning = t.judge.usefulness_reasoning;
           entry.judge_status             = t.judge.judge_status;
           entry.judge_latency_ms         = t.judge.judge_latency_ms;
         }

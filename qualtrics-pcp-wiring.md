@@ -19,8 +19,12 @@ rendered GitHub page.
 
 - The LLM practice question serves **both** LLM arms; the Randomizer sets `arm`
   (socratic|unrestricted) and the iframe pipes it through `${e://Field/arm}`.
-- `embed-pcp.html` hardcodes `PHASE='vlattrain'` and loads the 8 `block:"practice"`
-  PCP items itself — no `phase=`/`set=` params needed.
+- `embed-pcp.html` hardcodes `PHASE='vlattrain'` and loads 16 training items itself:
+  the 8 released `block:"practice"` PCP items plus 8 source-authored, training-only
+  items. The final four require a reasoning/tool-reliance declaration before the
+  chart question. All training items require a best substantive answer, with
+  no “I don't know” option or per-item confidence scale. No `phase=`/`set=` params
+  are needed. The 16-item immediate and 16-item delayed outcome banks remain held out.
 - Post-tests ship **no answer key** (participant-facing). They store the chosen
   option **letter** per item; correctness is scored **offline** against
   `PCP_KEY` in `pcp_scoring.js`. Per-item time cap is `TIME_LIMIT=90s` (tunable at
@@ -54,7 +58,7 @@ is set by the Randomizer.
 
 | Phase | Field (reused) | Holds |
 |---|---|---|
-| Aided practice | `vlat_train_responses` | JSON array, one dict per practice question: `{id, raw_id, chart_id, chart_type, format, answer, time_ms, interaction}`. `interaction` = `{mode:"llm", turns:[{prompt,response,response_latency_ms,judge}]}` (judge `null` on Unrestricted) **or** `{mode:"search", searches:[{query, clicks:[{title,url,index,dwell_ms,fallback_clicked}]}]}`. Built by `pcp_consolidate.js` inside the embed. |
+| Aided practice | `vlat_train_responses` | JSON array, one dict per practice question: `{id, raw_id, chart_id, chart_type, format, answer, reflection, time_ms, interaction}`. `reflection` is `null` for the first 12 items; for each of the final four it records `{mode, reasoning_text}`. `interaction` = `{mode:"llm", turns:[{prompt,response,response_latency_ms,judge}]}` (judge `null` on Unrestricted) **or** `{mode:"search", searches:[{query, clicks:[{title,url,index,dwell_ms,fallback_clicked}]}]}`. Built by `pcp_consolidate.js` inside the embed. |
 | Immediate / delayed post-test | `vlat_post_responses` | JSON array, one dict per item: `{id, chart_id, format, answer, rt_ms, timeout}`. Immediate and delayed live in separate surveys, so each uses its own copy of the field. |
 
 The field names are constants at the top of the bridges (`TRAIN_FIELD`,
@@ -67,7 +71,7 @@ analysis-facing record.
 ## Verified
 
 `pcp_consolidate.js` (transform) and `pcp_score.js` (scorer) are unit-tested —
-`node test_consolidate.js` → 26 pass; `node pcp_score.js --test` → 25 pass — across
+`node test_consolidate.js` → 45 pass; `node pcp_score.js --test` → 25 pass — across
 all three arms including the Socratic active-regen path. The post-test renderer was
 browser smoke-tested. The aided `embed-pcp.html` flow still needs an end-to-end
 pilot check with the Cloudflare Worker live.

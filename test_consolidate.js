@@ -12,7 +12,8 @@ const ts = () => new Date(Date.UTC(2026, 5, 7, 10, 0, _t++)).toISOString();
 
 const items = [
   { id: 'rem_fa_1', raw_id: 3,  chart_id: 'pcp_rem_fa_1', chart_type: 'Parallel Coordinates', format: 'tf', answer: 'A' },
-  { id: 'ana_fa_1', raw_id: 21, chart_id: 'pcp_ana_fa_1', chart_type: 'Parallel Coordinates', format: 'mc', answer: 'C' }
+  { id: 'ana_fa_1', raw_id: 21, chart_id: 'pcp_ana_fa_1', chart_type: 'Parallel Coordinates', format: 'mc', answer: 'C',
+    reflection: { complete:true, mode:'own_reasoning', reasoning_text:'The axes rise together.' } }
 ];
 
 // ───────────────── LLM-Socratic (judge on every turn; q2 triggers a regen) ──
@@ -20,12 +21,12 @@ _t = 0;
 const socEvents = [
   { type:'prompt',   content:'Is this a PCP?', question_id:'rem_fa_1', ts: ts() },
   { type:'response', content:'What do you notice about how the axes are arranged?', latency_ms:1740, question_id:'rem_fa_1', ts: ts() },
-  { type:'judge_result', turn_index:1, fidelity_score:4, intent_score:4, fidelity_reasoning:'probes axes', intent_reasoning:'genuine', judge_status:'ok', judge_latency_ms:512, is_regen_score:false, active_regen_triggered:false, question_id:'rem_fa_1', ts: ts() },
+  { type:'judge_result', turn_index:1, fidelity_score:4, intent_score:4, usefulness_score:4, fidelity_reasoning:'probes axes', intent_reasoning:'genuine', usefulness_reasoning:'one actionable next step', judge_status:'ok', judge_latency_ms:512, is_regen_score:false, active_regen_triggered:false, question_id:'rem_fa_1', ts: ts() },
   { type:'answer_final', value:'A', question_id:'rem_fa_1', ts: ts() },
   { type:'prompt',   content:'Just tell me the answer', question_id:'ana_fa_1', ts: ts() },
-  { type:'judge_result', turn_index:2, fidelity_score:2, intent_score:2, judge_status:'ok', judge_latency_ms:480, is_regen_score:false, active_regen_triggered:false, question_id:'ana_fa_1', ts: ts() }, // draft below threshold
+  { type:'judge_result', turn_index:2, fidelity_score:2, intent_score:2, usefulness_score:2, judge_status:'ok', judge_latency_ms:480, is_regen_score:false, active_regen_triggered:false, question_id:'ana_fa_1', ts: ts() }, // draft below threshold
   { type:'response', content:'Which axis shows horsepower?', latency_ms:1620, question_id:'ana_fa_1', ts: ts() },
-  { type:'judge_result', turn_index:2, fidelity_score:4, intent_score:2, judge_status:'ok', judge_latency_ms:900, is_regen_score:true, active_regen_triggered:true, question_id:'ana_fa_1', ts: ts() }, // regen judged
+  { type:'judge_result', turn_index:2, fidelity_score:4, intent_score:2, usefulness_score:4, judge_status:'ok', judge_latency_ms:900, is_regen_score:true, active_regen_triggered:true, question_id:'ana_fa_1', ts: ts() }, // regen judged
   { type:'answer_final', value:'C', question_id:'ana_fa_1', ts: ts() }
 ];
 let r = consolidate(socEvents, items, 'LLM');
@@ -36,11 +37,15 @@ check('soc: q1 prompt captured', r[0].interaction.turns[0].prompt === 'Is this a
 check('soc: q1 response captured', /axes/.test(r[0].interaction.turns[0].response));
 check('soc: q1 judge fidelity=4', r[0].interaction.turns[0].judge.fidelity === 4);
 check('soc: q1 judge intent=4', r[0].interaction.turns[0].judge.intent === 4);
+check('soc: q1 judge usefulness=4', r[0].interaction.turns[0].judge.usefulness === 4);
+check('soc: q1 judge usefulness reasoning retained', r[0].interaction.turns[0].judge.usefulness_reasoning === 'one actionable next step');
 check('soc: q1 keeps answer + chart meta', r[0].answer === 'A' && r[0].chart_id === 'pcp_rem_fa_1' && r[0].format === 'tf');
 check('soc: q1 time_ms > 0', r[0].time_ms > 0);
 check('soc: q2 last judge wins (fidelity 4)', r[1].interaction.turns[0].judge.fidelity === 4);
+check('soc: q2 last judge wins (usefulness 4)', r[1].interaction.turns[0].judge.usefulness === 4);
 check('soc: q2 active_regen surfaced', r[1].interaction.turns[0].judge.active_regen === true);
 check('soc: q2 response captured', /horsepower/.test(r[1].interaction.turns[0].response));
+check('soc: reflection mode and text retained', r[1].reflection && r[1].reflection.reasoning_text === 'The axes rise together.' && r[1].reflection.mode === 'own_reasoning');
 
 // ───────────────── LLM-Unrestricted (no judge layer) ──────────────────────
 _t = 0;

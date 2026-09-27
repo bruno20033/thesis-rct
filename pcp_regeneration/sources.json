@@ -1,0 +1,115 @@
+{
+  "auto_mpg": {
+    "url": "https://raw.githubusercontent.com/mwaskom/seaborn-data/master/mpg.csv",
+    "sha256": "c14b8b855ea7ee86cb9736bf8caaf281c4685ca08826f3eb2acaccaaf40f0d5a",
+    "expected_rows_after_cleaning": 392,
+    "note": "Auto MPG / Xmdv Car source. Rows with missing horsepower are removed, matching P-Lite Table 4."
+  },
+  "cereal_full": {
+    "url": "https://raw.githubusercontent.com/prasertcbs/basic-dataset/master/cereal.csv",
+    "filename": "cereal_full.csv",
+    "sha256": "d01ef75feff5ac2d6534500809f5fd569c09123f2d8d93df8018e8472c505884",
+    "expected_rows": 77,
+    "note": "Full 77-row cereal schema (name, manufacturer, type plus 13 measures). This is the schema rendered by the D3 cereal stimulus; an ordinal id is derived from its source-row position for that chart."
+  },
+  "cereal_xmdv": {
+    "url": "https://davis.wpi.edu/~xmdv/datasets/cereal.tar.gz",
+    "filename": "cereal.tar.gz",
+    "member": "cereal.okc",
+    "sha256": "6fb308e271af1e5f4b86dcf95537acf35e79c858759522b2b88bf637e45ceba5",
+    "expected_rows": 77,
+    "note": "The original 11-dimension Xmdv/P-Lite cereal archive. Retained separately because it is not the same schema as the D3 stimulus."
+  },
+  "college": {
+    "url": "https://raw.githubusercontent.com/lux-org/lux/master/lux/data/college.csv",
+    "sha256": "e152bbeb9d28ad19852b2c7dddad48d68bb178735f9a01845ef686d539e841cc",
+    "note": "Matches BTPL field names SATAverage, AdmissionRate, AverageCost and MedianDebt."
+  },
+  "penguins": {
+    "url": "https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv",
+    "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
+    "expected_rows": 344,
+    "note": "Palmer Penguins source used by the BTPL-style scatter/PCP correspondence items."
+  },
+  "highcharts_runners": {
+    "url": "https://www.highcharts.com/samples/data/marathon.json",
+    "sha256": "bf9c5ea055dc9ab8e76da7ed4ffa2018e56b9653c82a3f09660dda76adabb4a9",
+    "note": "The exact public data endpoint used by Highcharts' parallel-coordinates demo, which is referenced by the BTPL running-pace item."
+  },
+  "coal_disaster": {
+    "url": "https://davis.wpi.edu/~xmdv/datasets/coal_disasters.tar.gz",
+    "filename": "coal_disasters.tar.gz",
+    "member": "coal_disasters.okc",
+    "sha256": "5efd191718de5b0b15c77e983276c53f7e84540e5068df8b5e71a043e5ccf8e6",
+    "expected_rows": 191,
+    "note": "Original Xmdv Coal Disaster archive cited in P-Lite Table 4. It establishes lineage but not the BTPL item's undocumented selection/scale transformation."
+  },
+  "us_population": {
+    "url": "https://davis.wpi.edu/~xmdv/datasets/uspop.tar.gz",
+    "filename": "uspop.tar.gz",
+    "member": "uspop.okc",
+    "sha256": "65bae8b360f051d2e947561951bc89bd2f17eeb4e271c26e5701a2e1b64d39a0",
+    "expected_rows": 75,
+    "note": "Original Xmdv US Population archive. The BTPL stimulus uses the complete-record subset beginning in 1950."
+  },
+  "county_demographics_2019": {
+    "url": "https://raw.githubusercontent.com/corgis-edu/corgis/6d7e9e04079d0ef1db174de738cc2c2f93893bf9/website/datasets/csv/county_demographics/county_demographics.csv",
+    "sha256": "7a1a385e0b73d76daa3f8ef86deeae403bbab24d9e6d97a60603ac27240e5ad7",
+    "expected_rows": 3143,
+    "note": "Historical CORGIS county-demographics revision. It exactly matches the BTPL field schema and displayed four-axis limits; the current CORGIS revision does not."
+  },
+  "state_demographics_2019": {
+    "url": "https://raw.githubusercontent.com/corgis-edu/corgis/6d7e9e04079d0ef1db174de738cc2c2f93893bf9/website/datasets/csv/state_demographics/state_demographics.csv",
+    "sha256": "6e623a8cb720d98f95cacd80bde9808331d3f537a2e40b369c34eac0f3c44ba7",
+    "expected_rows": 52,
+    "note": "Historical CORGIS state-demographics revision matching the labels and state-scale values in the BTPL Evaluate items."
+  },
+  "iris": {
+    "url": "https://raw.githubusercontent.com/uiuc-cse/data-fa14/gh-pages/data/iris.csv",
+    "sha256": "bb5751f068bf218d9ea0889d0da1a4c8d056daae9abe17a4f04746975f9f2563",
+    "expected_rows": 150,
+    "note": "Fisher iris data used by the recognition-style PCP item."
+  },
+  "mtcars": {
+    "url": "https://raw.githubusercontent.com/plotly/datasets/master/mtcars.csv",
+    "filename": "mtcars.csv",
+    "sha256": "8472920bcc033f25daac781816bdff964dfd50e8c8c2262e3fb23d1b222db6d9",
+    "expected_rows": 32,
+    "note": "The canonical 32-row R mtcars data. It matches both the repeated-axis Evaluate stimulus and the named-car, displacement >= 400 Analyze selection."
+  },
+  "abalone": {
+    "url": "https://archive.ics.uci.edu/ml/machine-learning-databases/abalone/abalone.data",
+    "filename": "abalone.data",
+    "sha256": "de37cdcdcaaa50c309d514f248f7c2302a5f1f88c168905eba23fe2fbc78449f",
+    "expected_rows": 4177,
+    "note": "UCI Abalone data, used by the high-density Evaluate stimuli."
+  },
+  "nutrients": {
+    "url": "https://raw.githubusercontent.com/PatMartin/Dex/master/data/nutrients.csv",
+    "filename": "nutrients.csv",
+    "sha256": "36b5163bd9072363a4dbb79c36751bc820af0182902cd4a516f4596e347c74d2",
+    "expected_rows": 1153,
+    "note": "Dex nutrient data. Its labels and value ranges match the water/fiber/monounsaturated-fat Understand stimulus."
+  },
+  "diamonds": {
+    "url": "https://raw.githubusercontent.com/tidyverse/ggplot2/main/data-raw/diamonds.csv",
+    "filename": "diamonds.csv",
+    "sha256": "9574730b03aba241d899c4a97511c5061b19358fab89510774fb6c24168345c4",
+    "expected_rows": 53940,
+    "note": "The ggplot2 diamonds data used by the small categorical PCP recognition stimulus."
+  },
+  "ames_housing": {
+    "url": "https://raw.githubusercontent.com/kwaldenphd/plotly-intro-r/main/data/AmesHousing.csv",
+    "filename": "AmesHousing.csv",
+    "sha256": "23a034f84d05c5fbb0a65f7121a1f8993095544fd4f2914f918c0ab3c055170b",
+    "expected_rows": 2930,
+    "note": "Ames Housing data, whose GrLivArea and SalePrice fields match the scatterplot-with-marginals recognition item."
+  },
+  "hawks": {
+    "url": "https://vincentarelbundock.github.io/Rdatasets/csv/Stat2Data/Hawks.csv",
+    "filename": "Hawks.csv",
+    "sha256": "5c5f2cca3b3c7165c910abe076ac10e4a26279d4e5096a827ca788dbb72dd4be",
+    "expected_rows": 908,
+    "note": "Stat2Data Hawks data. Culmen, Hallux, Tail and the CH/RT/SS species codes match the deliberately wrong-legend Evaluate item."
+  }
+}

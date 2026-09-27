@@ -76,7 +76,7 @@ The study has **three arms**, randomised between-subjects:
 | Arm | URL parameters | What participants see |
 |---|---|---|
 | **Google-only (control)** | `?condition=SEARCH` | Real Google web search panel (Serper.dev API); chart + question on the left. No LLM. |
-| **Socratic LLM (treatment)** | `?condition=LLM&arm=socratic` | LLM chat with a probe-only system prompt; an LLM-as-Judge layer scores every turn for scaffold fidelity in the background (passive mode). |
+| **Socratic LLM (treatment)** | `?condition=LLM&arm=socratic` | LLM chat with concise, progressive scaffolding that withholds the target answer; a passive Judge scores fidelity, intent, and usefulness. |
 | **Unrestricted LLM (treatment)** | `?condition=LLM&arm=unrestricted` | LLM chat with a generally-helpful system prompt. No Judge layer. |
 
 If `arm` is missing on the LLM condition, the embed defaults to `unrestricted` for backward compatibility with the pre-arm URL shape.
@@ -89,11 +89,11 @@ By default the chat/search history resets between questions (constants `RESET_CH
 
 **To add or remove questions**, edit the `QUESTIONS` array in `embed.html` and declare a matching `qN_answer` field in Survey Flow for each new question id. `current_question_index` and `question_count` are written on every interaction so analysts can split drop-outs by which question the participant abandoned.
 
-### Share-chart button (unrestricted arm only)
+### Share-chart button (both LLM arms)
 
-The unrestricted-arm LLM panel has a **📊 Share chart with assistant** button above the chatbox. When clicked, it rasterises the current chart SVG to PNG and attaches it (plus a structured text block with title, y-axis, data points, and the True/False claim) to the next message as a multimodal `user` block. Vision-capable models (the default `openai/gpt-4o-mini` qualifies) can then reason directly about the image; non-vision models will silently ignore it.
+Both the Socratic and unrestricted LLM panels have a **📊 Share chart with assistant** button above the chatbox. When clicked, the legacy `embed.html` flow rasterises the current chart SVG and attaches it with the chart description and task claim. The PCP `embed-pcp.html` flow attaches the displayed chart PNG with its chart type and current question. Both are sent with the participant's next message as a multimodal `user` block. Vision-capable models can then reason about the image; non-vision models will silently ignore it.
 
-The Socratic arm intentionally omits this button — feeding the chart image to the model would let it answer the item directly, defeating the probe-only scaffold.
+In the Socratic arm, sharing changes only the context available to the tutor: the Socratic system prompt still forbids revealing, computing, or confirming the item answer, and the Judge continues to score every response for scaffold fidelity.
 
 One share per question, reset on advance. Each click writes a `context_share` event to `InteractionLog.events` (tagged with `question_id`), but the PNG data is **not** persisted (it's regenerated from `QUESTIONS[i].chart` on each API build, kept in an in-memory cache otherwise). No new Embedded Data fields are required.
 
@@ -144,19 +144,24 @@ search_click_index_1 ... search_click_index_20
 search_dwell_ms_1 ... search_dwell_ms_20
 
 # Socratic-arm Judge fields (empty for other arms)
+socratic_prompt_version
 judge_model
 judge_mode
 judge_call_count
 judge_failure_count
 judge_avg_fidelity
 judge_min_fidelity
+judge_avg_usefulness
+judge_min_usefulness
 judge_below_threshold_count
 judge_extraction_attempt_count
 judge_total_latency_ms
 judge_fidelity_1 judge_fidelity_2 ... judge_fidelity_20
 judge_intent_1 judge_intent_2 ... judge_intent_20
+judge_usefulness_1 judge_usefulness_2 ... judge_usefulness_20
 judge_fidelity_reasoning_1 ... judge_fidelity_reasoning_20
 judge_intent_reasoning_1 ... judge_intent_reasoning_20
+judge_usefulness_reasoning_1 ... judge_usefulness_reasoning_20
 judge_status_1 ... judge_status_20
 judge_latency_ms_1 ... judge_latency_ms_20
 judge_active_regen_1 ... judge_active_regen_20
@@ -166,7 +171,7 @@ The `prompt_N` / `response_N` / `search_query_N` fields capture each turn separa
 
 `prompt_count` counts user prompts SENT (regardless of whether the AI replied successfully). `response_count` counts successful AI replies / search results shown.
 
-`judge_fidelity_N` (1–5) and `judge_intent_N` (1–4) are the Socratic-arm Judge scores per turn, defined in [rct_judge_prompts.md](rct_judge_prompts.md). `judge_status_N` is `ok` / `parse_error` / `api_error` / `timeout`. `judge_active_regen_N` is `true`/`false` indicating whether active mode triggered a silent regeneration on that turn (always `false` in passive mode). Aggregates: `judge_avg_fidelity` (mean over OK turns), `judge_min_fidelity`, `judge_below_threshold_count` (turns where fidelity < 3), `judge_extraction_attempt_count` (turns where intent ∈ {1, 2}). Empty for non-Socratic arms.
+`judge_fidelity_N` (1–5), `judge_intent_N` (1–4), and `judge_usefulness_N` (1–5) are the Socratic-arm Judge scores per turn, defined in [rct_judge_prompts.md](rct_judge_prompts.md). Usefulness is deliberately orthogonal to answer-withholding fidelity: a response may avoid leakage yet still be vague or burdensome. `judge_status_N` is `ok` / `parse_error` / `api_error` / `timeout`. `judge_active_regen_N` is `true`/`false` indicating whether active mode triggered a silent regeneration on that turn (always `false` in passive mode). Aggregates include the mean and minimum fidelity/usefulness scores, the number of fidelity failures, and extraction-attempt counts. Empty for non-Socratic arms.
 
 Add a **Randomizer** that evenly assigns each participant to **one of three branches**:
 
@@ -286,6 +291,8 @@ Keys are the participant's prompts; values are an object containing the assistan
     "judge_fidelity_reasoning": "Probing question, no answer revealed",
     "judge_intent_score":       4,                                  // 1-4
     "judge_intent_reasoning":   "Conceptual inquiry",
+    "judge_usefulness_score":   4,                                  // 1-5
+    "judge_usefulness_reasoning":"One tailored next step",
     "judge_status":             "ok",                               // "ok" | "timeout" | "parse_error" | "api_error"
     "judge_latency_ms":         1240
   },
@@ -295,6 +302,8 @@ Keys are the participant's prompts; values are an object containing the assistan
     "judge_fidelity_reasoning": "Probing back at the question",
     "judge_intent_score":       1,
     "judge_intent_reasoning":   "Direct extraction attempt",
+    "judge_usefulness_score":   3,
+    "judge_usefulness_reasoning":"Clear refusal and redirect",
     "judge_status":             "ok",
     "judge_latency_ms":         980
   }
@@ -463,14 +472,15 @@ Expect `200` + `{"items":[{"title":"…","url":"…","displayUrl":"…","snippet
 - If the Worker ever returns non-OK, the embed's retry loop kicks in (2 retries with back-off, then a clean `error` event and the "search temporarily unavailable" message).
 - Watch per-query spend on the Serper dashboard and set a plan cap before launch, the same way you cap the OpenRouter keys.
 
-## LLM-as-Judge fidelity layer (Socratic arm only)
+## LLM-as-Judge quality layer (Socratic arm only)
 
-The Socratic arm has known scaffold-failure modes — direct or oblique solution extraction by the participant, model drift toward helpful-assistant mode, jailbreaks, and gaming. To detect and quantify these, every Socratic-arm turn is silently scored by a **second LLM** (the Judge) on two rubrics:
+The Socratic arm has known scaffold-failure modes — direct or oblique solution extraction, answer leakage, vague questioning, repetition, and cognitively burdensome replies. Every turn is silently scored by a **second LLM** on three independent dimensions:
 
 - **`fidelity_score` (1–5):** SOLO-style rubric measuring whether the assistant message stayed within the Socratic boundary (passing threshold = 3 / Relational).
 - **`intent_score` (1–4):** taxonomy of participant intent — direct extraction / oblique extraction / legitimate clarification / legitimate conceptual inquiry. Intent scores 1 and 2 flag the turn for analyst review (no participant-facing intervention).
+- **`usefulness_score` (1–5):** whether the response gives a clear next step, responds to the participant's actual reasoning, and adapts support without unnecessary complexity.
 
-Both scores are returned in **one** Judge round-trip per turn. Architecture is adapted from VibeCheck (Sankaranarayanan, 2026, [arXiv:2602.20206v2](https://arxiv.org/abs/2602.20206)) — the design intent transfers (cross-family Judge, SOLO rubric, prompt-injection hardening), the IDE-coupled mechanics (Apply-button gate, file-system watcher) are dropped because there's no IDE in a Qualtrics chat widget.
+All three scores are returned in **one** Judge round-trip per turn. Only fidelity can trigger active-mode regeneration; usefulness remains observational so it cannot relax the target-answer boundary. The architecture is adapted from VibeCheck (Sankaranarayanan, 2026, [arXiv:2602.20206v2](https://arxiv.org/abs/2602.20206)): the cross-family Judge, SOLO rubric, and prompt-injection hardening transfer, while its IDE-specific gate and file watcher do not.
 
 ### How to swap the Judge model
 
@@ -506,8 +516,10 @@ Per-turn flat fields (1..20) appear directly as CSV columns:
 |---|---|---|
 | `judge_fidelity_N` | int 1–5 | empty if turn N hasn't been judged yet |
 | `judge_intent_N` | int 1–4 | |
+| `judge_usefulness_N` | int 1–5 | pedagogical usefulness, independent of fidelity |
 | `judge_fidelity_reasoning_N` | string ≤ 300 chars | preview; full text in `InteractionLog` JSON |
 | `judge_intent_reasoning_N` | string ≤ 300 chars | |
+| `judge_usefulness_reasoning_N` | string ≤ 300 chars | |
 | `judge_status_N` | enum | `ok` / `parse_error` / `api_error` / `timeout` / `''` (no call) |
 | `judge_latency_ms_N` | int | wall-clock from Judge fetch dispatch to JSON parse |
 | `judge_active_regen_N` | bool string | `true` iff active mode triggered a regen on this turn |
@@ -515,6 +527,8 @@ Per-turn flat fields (1..20) appear directly as CSV columns:
 Session aggregates:
 - `judge_avg_fidelity` (mean over OK turns)
 - `judge_min_fidelity`
+- `judge_avg_usefulness` (mean over OK turns with a usefulness score)
+- `judge_min_usefulness`
 - `judge_below_threshold_count` (turns where fidelity < 3)
 - `judge_extraction_attempt_count` (turns where intent ∈ {1, 2})
 - `judge_call_count`, `judge_failure_count`, `judge_total_latency_ms`
@@ -522,7 +536,7 @@ Session aggregates:
 
 For full per-event reasoning, parse the `InteractionLog` column as JSON and filter for `events[].type === 'judge_result'`. Each judge_result event also carries `is_regen_score` (true on second-pass scoring of regenerated responses in active mode), `active_regen_triggered`, `active_regen_succeeded`, and `raw_response_truncated` (set only when the Judge returned unparseable JSON).
 
-The full Judge prompt and calibration corpus live in [rct_judge_prompts.md](rct_judge_prompts.md). The two arm system prompts live in [rct_arm_prompts.md](rct_arm_prompts.md). Both are documentation files; runtime copies are JS string literals in `embed.html`.
+The full Judge prompt and calibration corpus live in [rct_judge_prompts.md](rct_judge_prompts.md). The arm system prompts live in [rct_arm_prompts.md](rct_arm_prompts.md). Runtime copies are JS literals in `embed-pcp.html` and `embed.html`.
 
 ## Refresh resilience
 

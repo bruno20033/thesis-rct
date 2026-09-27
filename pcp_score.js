@@ -11,7 +11,9 @@
 // scoreResponses(arr) -> same shape, for the NEW one-field consolidated format
 //   arr   = [ { id, answer, timeout, ... }, ... ]  (post-test, or the richer training array)
 const path = require('path');
-const items = require(path.join(__dirname, 'pcp_items_data.js'));
+const releasedItems = require(path.join(__dirname, 'pcp_items_data.js'));
+const extensionItems = require(path.join(__dirname, 'pcp_training_extension.js'));
+const items = releasedItems.concat(extensionItems);
 const { PCP_KEY, PCP_OMIT } = require(path.join(__dirname, 'pcp_scoring.js'));
 
 function classify(id, resp, timeout) {

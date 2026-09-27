@@ -2,15 +2,17 @@
 
 Applies identically to the immediate and delayed 16-item tests, across all three
 arms. This changes the response procedure, not the item bank, chart files, answer
-keys, Bloom allocation, or participant-seeded item order. Mini-VLAT baseline,
-aided practice, and the native Qualtrics post-training PCS battery are unchanged.
+keys, Bloom allocation, or participant-seeded item order. Mini-VLAT baseline
+and the native Qualtrics post-training PCS battery are unchanged. Training's
+separate best-answer procedure, without per-item confidence, is documented in
+`TRAINING_EXTENSION.md`.
 
 ## Participant procedure
 
 1. Choose the best substantive answer, even when unsure. The outcome renderer
    filters out the original English `I don't know` option before applying the
    German overlay; the remaining option letters are preserved. The shared bank
-   and offline omission keys are retained for training and historical exports.
+   and offline omission keys are retained for historical exports.
 2. Select **Confirm answer**. The chosen answer is locked; no correctness feedback
    is given. The answer timer stops.
 3. Answer **How confident are you that your answer is correct?** using 0%, 10%,
