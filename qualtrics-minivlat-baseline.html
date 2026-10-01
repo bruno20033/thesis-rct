@@ -213,6 +213,11 @@
     post({ type: 'rct_height', value: document.body.scrollHeight });
   }
 
+  function returnToChart() {
+    window.scrollTo(0, 0);
+    post({ type: 'rct_scroll_top' });
+  }
+
   function setAnswersEnabled(enabled) {
     var inputs = elOptions.querySelectorAll('input');
     for (var i = 0; i < inputs.length; i++) inputs[i].disabled = !enabled;
@@ -310,6 +315,7 @@
 
     // Re-measure after chart decode as its aspect ratio affects iframe height.
     sendHeight();
+    if (currentIndex > 0) returnToChart();
   }
 
   // ── Timer ──
@@ -415,6 +421,7 @@
     // Show completion screen
     document.getElementById('quiz-container').style.display = 'none';
     document.getElementById('complete-screen').style.display = 'block';
+    returnToChart();
 
     // The previous chart made the iframe tall. Its scrollHeight can stay at
     // that old viewport height even after we hide the quiz, leaving the

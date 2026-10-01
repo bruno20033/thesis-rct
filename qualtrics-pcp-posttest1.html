@@ -39,6 +39,15 @@
   /* Chart */
   .chart-container { text-align: center; margin-bottom: 24px; }
   .chart-container img { max-width: 760px; width: 100%; border: 1px solid #dee2e6; border-radius: 8px; cursor: zoom-in; }
+  .chart-loading { width: 100%; max-width: 760px; aspect-ratio: 1; margin: 0 auto;
+                   display: flex; flex-direction: column; align-items: center; justify-content: center;
+                   gap: 16px; background: #f8f9fa; border: 2px dashed #ced4da;
+                   border-radius: 8px; color: #495057; font-weight: 600; }
+  .chart-loading-spinner { width: 38px; height: 38px; border: 4px solid #d0ebff;
+                           border-top-color: #228be6; border-radius: 50%;
+                           animation: chart-spin .8s linear infinite; }
+  @keyframes chart-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .chart-loading-spinner { animation: none; } }
   .chart-placeholder { max-width: 760px; margin: 0 auto; padding: 60px 40px; background: #f8f9fa;
                         border: 2px dashed #ced4da; border-radius: 8px; color: #868e96; text-align: center; }
   .chart-placeholder .title { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 8px; }
@@ -137,7 +146,7 @@
 
 <div id="complete-screen" class="complete-screen" style="display:none">
   <h2 id="complete-title">Block Complete</h2>
-  <p id="complete-msg">Your responses have been recorded. Please wait…</p>
+  <p id="complete-msg">All answers recorded. Click the Next button at the bottom right to continue.</p>
 </div>
 
 <script src="pcp_items_data.js"></script>
@@ -159,12 +168,12 @@
   if (LANG !== 'DE') LANG = 'EN';
   try { document.documentElement.lang = LANG.toLowerCase(); } catch (e) {}
   var UI = {
-    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'Your responses have been recorded. Please wait…',
+    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'All answers recorded. Click the Next button at the bottom right to continue.',
       confirm: 'Confirm answer', instructions: 'Choose your best answer, even if you are unsure. After confirming it, you will rate how confident you are that it is correct.',
       locked: 'Your answer is confirmed and cannot be changed. Please rate your confidence to continue.',
       confidence: 'How confident are you that your answer is correct?', low: 'Not at all confident', high: 'Very confident',
       help: 'Move the slider or tap a position to choose your rating from 1 to 7.', unselected: 'No rating selected' },
-    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Ihre Antworten wurden gespeichert. Bitte warten…',
+    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Alle Antworten wurden gespeichert. Klicken Sie unten rechts auf „Weiter“, um fortzufahren.',
       confirm: 'Antwort bestätigen', instructions: 'Wählen Sie die Ihrer Meinung nach beste Antwort, auch wenn Sie unsicher sind. Nach der Bestätigung geben Sie an, wie sicher Sie sind, dass Ihre Antwort richtig ist.',
       locked: 'Ihre Antwort wurde bestätigt und kann nicht mehr geändert werden. Geben Sie bitte an, wie sicher Sie sind, um fortzufahren.',
       confidence: 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?', low: 'Überhaupt nicht sicher', high: 'Sehr sicher',
@@ -203,6 +212,8 @@
   var phase = 'answer', selectedConfidence = null, answerRt = null, confidenceStartTime = 0;
   var timerInterval = null, timeRemaining = TIME_LIMIT, blockStartTime = Date.now();
   var responses = [];
+  var chartReady = false;
+  var chartPreloads = {};
 
   // ── DOM refs ──
   var elCurrent = document.getElementById('q-current');
@@ -258,6 +269,25 @@
 
   function post(msg) { try { window.parent.postMessage(msg, '*'); } catch (e) {} }
   function sendHeight() { post({ type: 'rct_height', value: document.body.scrollHeight }); }
+  function returnToChart() {
+    window.scrollTo(0, 0);
+    post({ type: 'rct_scroll_top' });
+  }
+  function preloadChart(index) {
+    if (index >= items.length) return;
+    var id = items[index].chartId;
+    if (chartPreloads[id]) return;
+    var preload = new Image();
+    preload.decoding = 'async';
+    preload.src = 'charts/' + id + '.png';
+    chartPreloads[id] = preload;
+  }
+  function setAnswersEnabled(enabled) {
+    var inputs = elOptions.querySelectorAll('input');
+    for (var i = 0; i < inputs.length; i++) inputs[i].disabled = !enabled;
+    elOptions.style.opacity = enabled ? '' : '0.55';
+  }
+
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 
@@ -275,6 +305,7 @@
     selectedConfidence = null;
     answerRt = null;
     phase = 'answer';
+    chartReady = false;
     elInstructions.textContent = L.instructions;
     elOptions.classList.remove('locked');
     if (elConfidence.open) elConfidence.close();
@@ -293,9 +324,37 @@
     // or the missing-image placeholder: some items ask participants to identify it.
     var alt = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var imgPath = 'charts/' + item.chartId + '.png';
-    elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escAttr(alt) + '" ' +
-      'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' + escHtml(alt) +
-      '</div><div class=hint>[chart image not loaded — charts/' + escHtml(item.chartId) + '.png]</div></div>\'">';
+    elChart.innerHTML = '<div class="chart-loading" role="status" aria-live="polite">' +
+      '<span class="chart-loading-spinner" aria-hidden="true"></span><span>' +
+      (LANG === 'DE' ? 'Diagramm wird geladen…' : 'Loading chart…') + '</span></div>';
+    var loadingEl = elChart.firstChild;
+    var chartImg = new Image();
+    chartImg.alt = alt;
+    chartImg.decoding = 'async';
+    chartImg.fetchPriority = 'high';
+    function startWhenVisible() {
+      if (elChart.firstChild !== loadingEl || chartReady) return;
+      elChart.replaceChildren(chartImg);
+      chartReady = true;
+      setAnswersEnabled(true);
+      itemStartTime = Date.now();
+      startTimer();
+      sendHeight();
+      preloadChart(currentIndex + 1);
+      preloadChart(currentIndex + 2);
+    }
+    chartImg.addEventListener('load', function () {
+      if (chartImg.decode) chartImg.decode().then(startWhenVisible, startWhenVisible);
+      else startWhenVisible();
+    });
+    chartImg.addEventListener('error', function () {
+      if (elChart.firstChild !== loadingEl) return;
+      elChart.innerHTML = '<div class="chart-placeholder" role="alert"><div class="title">' +
+        escHtml(alt) + '</div><div class="hint">' +
+        (LANG === 'DE' ? 'Das Diagramm konnte nicht geladen werden. Bitte laden Sie die Seite erneut.' :
+          'The chart could not be loaded. Please reload this page.') + '</div></div>';
+      sendHeight();
+    });
 
     elQuestion.textContent = loc(item, 'questionText');
 
@@ -311,15 +370,14 @@
     }
     elOptions.innerHTML = html;
 
-    // Timer
-    itemStartTime = Date.now();
-    startTimer();
-
+    // Answers and the timer remain paused until the image has decoded.
+    setAnswersEnabled(false);
+    elTimer.textContent = '…';
+    clearInterval(timerInterval);
+    chartImg.src = imgPath;
     sendHeight();
-    var chartImg = elChart.querySelector('img');
-    if (chartImg) chartImg.addEventListener('load', sendHeight);
-    // Return keyboard/scroll focus from the confidence step to the new question.
-    if (currentIndex > 0) document.getElementById('question-progress').focus();
+    if (currentIndex > 0) returnToChart();
+    if (currentIndex > 0) document.getElementById('question-progress').focus({ preventScroll: true });
   }
 
   // ── Timer (disabled when TIME_LIMIT <= 0) ──
@@ -344,7 +402,7 @@
 
   // ── Selection / submit ──
   window.selectOption = function (el) {
-    if (phase !== 'answer' || !elOptions.contains(el)) return;
+    if (phase !== 'answer' || !chartReady || !elOptions.contains(el)) return;
     var opts = elOptions.querySelectorAll('.option');
     for (var i = 0; i < opts.length; i++) { opts[i].classList.remove('selected'); opts[i].querySelector('input').checked = false; }
     el.classList.add('selected');
@@ -438,7 +496,8 @@
 
     document.getElementById('quiz-container').style.display = 'none';
     document.getElementById('complete-screen').style.display = 'block';
-    sendHeight();
+    post({ type: 'rct_height', value: 480 });
+    returnToChart();
   }
 
   // ── Chart zoom ──
@@ -454,7 +513,10 @@
 
   // ── Start ──
   renderItem();
-  sendHeight();
+  post({ type: 'rct_ready' });
+  window.addEventListener('message', function (event) {
+    if (event.source === window.parent && event.data && event.data.type === 'rct_ready_probe') post({ type: 'rct_ready' });
+  });
 })();
 </script>
 

@@ -73,16 +73,20 @@ async function currentItem(frame) {
   const src = await frame.locator('#chart-area img').getAttribute('src');
   return items.find(it => src === `charts/${it.chartId}.png`);
 }
+async function waitChartReady(frame) {
+  await frame.waitForFunction(() => {
+    const img = document.querySelector('#chart-area img');
+    return img && img.complete && img.naturalWidth > 0 && document.querySelector('#timer').textContent !== '…';
+  }, null, {polling:50});
+}
 
-function confidenceField(block) { return block === 'posttest1' ? 'confidence_rating' : 'confidence_pct'; }
-function confidenceButton(frame, block) { return frame.locator(block === 'posttest1' ? '#btn-confidence' : '#btn-next'); }
+function confidenceField() { return 'confidence_rating'; }
+function confidenceButton(frame) { return frame.locator('#btn-confidence'); }
 async function chooseConfidence(frame, block, value) {
-  if (block === 'posttest1') {
-    const slider = frame.locator('#confidence-slider');
-    await slider.focus();
-    await slider.press('Home');
-    for (let n = 1; n < value; n++) await slider.press('ArrowRight');
-  } else await frame.locator(`input[name="confidence"][value="${value}"]`).check();
+  const slider = frame.locator('#confidence-slider');
+  await slider.focus();
+  await slider.press('Home');
+  for (let n = 1; n < value; n++) await slider.press('ArrowRight');
 }
 
 for (const block of ['posttest1', 'posttest2']) {
@@ -99,10 +103,7 @@ for (const block of ['posttest1', 'posttest2']) {
         assert.equal(await frame.locator('#btn-next').isDisabled(), true);
         assert.equal(await frame.locator('#btn-next').textContent(), lang === 'DE' ? 'Antwort bestätigen' : 'Confirm answer');
         assert.equal(await frame.locator('#confidence-panel').isVisible(), false);
-        await frame.waitForFunction(() => {
-          const img = document.querySelector('#chart-area img');
-          return img && img.complete && img.naturalWidth > 0;
-        }, null, {polling: 50});
+        await waitChartReady(frame);
         assert.equal(await frame.locator('#chart-area img').evaluate(img => img.complete && img.naturalWidth > 0), true);
         assert.equal(await frame.locator('body').evaluate(el => el.scrollWidth <= window.innerWidth), true);
 
@@ -117,7 +118,7 @@ for (const block of ['posttest1', 'posttest2']) {
           ? 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?' : 'How confident are you that your answer is correct?');
         assert.equal(await confidenceButton(frame, block).isDisabled(), true, 'no default confidence');
         assert.equal(await frame.locator('input[name="confidence"]:checked').count(), 0);
-        if (block === 'posttest1') {
+        {
           assert.equal(await frame.locator('#confidence-panel').evaluate(el => el.tagName === 'DIALOG' && el.open), true);
           const slider = frame.locator('#confidence-slider');
           assert.equal(await slider.getAttribute('min'), '1');
@@ -139,7 +140,7 @@ for (const block of ['posttest1', 'posttest2']) {
           await page.clock.runFor(95000);
           assert.equal(await frame.locator('#q-current').textContent(), '1');
         }
-        const confidence = block === 'posttest1' ? (i === 0 ? 1 : i === 1 ? 7 : 4) : (i === 0 ? 0 : i === 1 ? 100 : 60);
+        const confidence = i === 0 ? 1 : i === 1 ? 7 : 4;
         await page.clock.runFor(2400);
         await chooseConfidence(frame, block, confidence);
         await confidenceButton(frame, block).click();
@@ -158,17 +159,18 @@ for (const block of ['posttest1', 'posttest2']) {
       assert.deepEqual(data.map(r => r.id), seen);
       assert.deepEqual(data.map(r => r.answer), chosen);
       data.forEach((r, i) => {
-        assert.equal(r[confidenceField(block)], block === 'posttest1' ? (i === 0 ? 1 : i === 1 ? 7 : 4) : (i === 0 ? 0 : i === 1 ? 100 : 60));
-        if (block === 'posttest1') {
+        assert.equal(r[confidenceField(block)], i === 0 ? 1 : i === 1 ? 7 : 4);
+        {
           assert.equal(r.confidence_scale, '1-7');
           assert.equal('confidence_pct' in r, false, 'do not encode an ordinal rating as a percentage');
         }
         assert.equal(r.timeout, false);
-        assert.equal(r.response_format, block === 'posttest1' ? 'best_answer_confidence_likert7_v1' : 'best_answer_confidence_v1');
+        assert.equal(r.response_format, 'best_answer_confidence_likert7_v1');
         assert.ok(r.rt_ms >= 1200 && r.rt_ms < 3000, 'answer RT excludes confidence');
         assert.ok(r.confidence_rt_ms >= (i === 0 ? 97400 : 2400));
       });
       assert.equal(messages.filter(m => m.type === 'pcp_item_response').length, 16);
+      assert.equal(messages.filter(m => m.type === 'rct_scroll_top').length, 16);
       assert.equal(messages.filter(m => m.type === 'pcp_block_complete').length, 1);
       assert.equal(messages.filter(m => m.type === 'rct_complete').length, 1);
       const complete = messages.find(m => m.type === 'pcp_block_complete');
@@ -190,6 +192,7 @@ for (const block of ['posttest1', 'posttest2']) {
   test(`${block}: timeouts remain missing, reset state, and retain 16-item denominator`, async t => {
     const {page, frame, errors} = await openTest(t, block);
     for (let i = 0; i < 16; i++) {
+      await waitChartReady(frame);
       if (i === 1) await frame.locator('.option input').first().check();
       await page.clock.runFor(90000);
     }
@@ -217,13 +220,13 @@ for (const block of ['posttest1', 'posttest2']) {
     const selected = await frame.locator('.option.selected').getAttribute('data-value');
     await frame.evaluate(block => {
       selectOption(document.querySelectorAll('.option')[1]);
-      (block === 'posttest1' ? [-10, 0, 8, 101, '', null, NaN, 1.5] : [-10, 101, '', null, NaN, 15]).forEach(value => selectConfidence(value));
+      [-10, 0, 8, 101, '', null, NaN, 1.5].forEach(value => selectConfidence(value));
       submitAnswer();
     }, block);
     assert.equal(await frame.locator('.option.selected').getAttribute('data-value'), selected);
     assert.equal(await frame.locator('#q-current').textContent(), '1');
     assert.equal(await confidenceButton(frame, block).isDisabled(), true);
-    await chooseConfidence(frame, block, block === 'posttest1' ? 1 : 0);
+    await chooseConfidence(frame, block, 1);
     assert.equal(await confidenceButton(frame, block).isEnabled(), true);
     await confidenceButton(frame, block).click();
     assert.equal(await frame.locator('#q-current').textContent(), '2');
@@ -233,19 +236,21 @@ for (const block of ['posttest1', 'posttest2']) {
 
   test(`${block}: answer/confidence state cannot leak across a timeout`, async t => {
     const {page, frame} = await openTest(t, block);
+    await waitChartReady(frame);
     await page.clock.runFor(90000); // First item expires with no answer.
+    await waitChartReady(frame);
     const it = await currentItem(frame);
     await frame.locator(`.option[data-value="${PCP_KEY[it.id]}"] input`).check();
     await frame.locator('#btn-next').click();
-    await chooseConfidence(frame, block, block === 'posttest1' ? 1 : 0);
+    await chooseConfidence(frame, block, 1);
     await confidenceButton(frame, block).click();
     // The next item's unconfirmed selection must not inherit that confidence.
     await frame.locator('.option input').first().check();
-    for (let i = 2; i < 16; i++) await page.clock.runFor(90000);
+    for (let i = 2; i < 16; i++) { await waitChartReady(frame); await page.clock.runFor(90000); }
     await page.waitForFunction(() => writes.length === 1, null, {polling:50});
     const records = await page.evaluate(() => JSON.parse(writes[0].value));
     assert.equal(records[1].id, it.id);
-    assert.equal(records[1][confidenceField(block)], block === 'posttest1' ? 1 : 0);
+    assert.equal(records[1][confidenceField(block)], 1);
     assert.equal(records[1].timeout, false);
     records.filter((_, i) => i !== 1).forEach(r => {
       assert.equal(r.answer, 'timeout');

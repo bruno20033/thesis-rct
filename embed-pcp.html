@@ -167,7 +167,7 @@
   .rct-option input { accent-color: #1976d2; cursor: pointer; margin-top: 2px; flex-shrink: 0; }
   .rct-option-idk { border-style: dashed; color: #78909c; }
   .rct-reflection-title { margin: 0 0 8px; font-size: 16px; color: #263238; }
-  .rct-reflection-prompt { margin: 0 0 12px; font-size: 14px; line-height: 1.45; color: #455a64; }
+  .rct-reflection-prompt { display:block; margin: 0 0 12px; font-size: 14px; line-height: 1.45; color: #455a64; }
   .rct-reflection-text {
     width: 100%; min-height: 88px; box-sizing: border-box; resize: vertical;
     padding: 9px; border: 1px solid #b0bec5; border-radius: 4px; font: inherit;
@@ -189,6 +189,14 @@
   .rct-reflection-tool { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; line-height: 1.45; }
   .rct-reflection-tool input { margin-top: 3px; accent-color: #1976d2; }
   .rct-reflection-dialog .rct-button { width: 100%; }
+  .rct-confidence-value { display:block; text-align:center; font-weight:600; margin:16px 0 8px; }
+  .rct-confidence-slider { width:100%; accent-color:#1976d2; }
+  .rct-confidence-ticks, .rct-confidence-anchors { display:flex; justify-content:space-between; gap:12px; }
+  .rct-confidence-ticks { color:#607d8b; font-size:12px; }
+  .rct-confidence-anchors { margin:8px 0 20px; color:#455a64; font-size:13px; }
+  .rct-complete-screen { min-height:440px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:32px; box-sizing:border-box; }
+  .rct-complete-screen h2 { color:#2e7d32; font-size:26px; margin:0 0 12px; }
+  .rct-complete-screen p { color:#455a64; font-size:17px; line-height:1.5; max-width:540px; }
 
   .rct-button {
     appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
@@ -672,9 +680,14 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       chart_loading: 'Loading chart…',
       placeholder_item: 'Placeholder item — scoring excluded',
       reflection_title: 'Explain your answer',
-      reflection_prompt: 'Briefly explain how you arrived at the answer you just chose.',
+      reflection_prompt: 'Briefly explain how you chose this answer (one or two sentences).',
       reflection_tool: 'I relied mainly on the tool and cannot state my own reasoning.',
-      reflection_text_prompt: 'Briefly explain your reasoning (one or two sentences).',
+      confidence_title: 'How confident are you that your answer is correct?',
+      confidence_low: 'Not at all confident',
+      confidence_high: 'Very confident',
+      confidence_continue: 'Continue',
+      complete_title: 'Block Complete',
+      complete_message: 'All answers recorded. Click the Next button at the bottom right to continue.',
       reflection_continue: 'Submit answer and continue',
       reflection_finish: 'Submit answer and finish'
     },
@@ -736,9 +749,14 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       chart_loading: 'Diagramm wird geladen…',
       placeholder_item: 'Platzhalter-Item — von der Bewertung ausgeschlossen',
       reflection_title: 'Begründen Sie Ihre Antwort',
-      reflection_prompt: 'Erklären Sie kurz, wie Sie zu Ihrer gerade gewählten Antwort gekommen sind.',
+      reflection_prompt: 'Erklären Sie kurz, wie Sie diese Antwort gewählt haben (ein oder zwei Sätze).',
       reflection_tool: 'Ich habe mich hauptsächlich auf das Werkzeug gestützt und kann keine eigene Begründung nennen.',
-      reflection_text_prompt: 'Erläutern Sie Ihre Begründung kurz (ein oder zwei Sätze).',
+      confidence_title: 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?',
+      confidence_low: 'Überhaupt nicht sicher',
+      confidence_high: 'Sehr sicher',
+      confidence_continue: 'Weiter',
+      complete_title: 'Block abgeschlossen',
+      complete_message: 'Alle Antworten wurden gespeichert. Klicken Sie unten rechts auf „Weiter“, um fortzufahren.',
       reflection_continue: 'Antwort abgeben und fortfahren',
       reflection_finish: 'Antwort abgeben und abschließen'
     }
@@ -996,6 +1014,12 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     // page to scroll. Kept as a no-op so existing call sites and the parent
     // bridge contract stay valid.
   }
+  function returnToChart() {
+    window.scrollTo(0, 0);
+    var questionScroll = $('.rct-question');
+    if (questionScroll) questionScroll.scrollTop = 0;
+    postToParent({ type: 'rct_scroll_top' });
+  }
 
   /* ==================================================================
    * Per-participant local persistence (refresh resilience)
@@ -1033,7 +1057,8 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       current_question_index: 0,   // 0-based; advances on per-question submit
       question_count: QUESTIONS.length,
       answers: initialAnswers,
-      reflections: initialReflections
+      reflections: initialReflections,
+      confidences: {}
     };
   }
 
@@ -1047,6 +1072,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
         if (!(q.id in parsed.answers)) parsed.answers[q.id] = null;
       });
       if (!parsed.reflections || typeof parsed.reflections !== 'object') parsed.reflections = {};
+      if (!parsed.confidences || typeof parsed.confidences !== 'object') parsed.confidences = {};
       QUESTIONS.forEach(function (q) {
         if (q.reflection && !parsed.reflections[q.id]) {
           parsed.reflections[q.id] = { complete: false, mode: null, reasoning_text: null };
@@ -1139,7 +1165,10 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       items.push({
         id: q.id, raw_id: q.raw_id, chart_id: q.chartId,
         chart_type: q.chartType, format: q.format, answer: answer,
-        reflection: q.reflection ? (log.reflections[q.id] || null) : null
+        reflection: q.reflection ? (log.reflections[q.id] || null) : null,
+        confidence_rating: log.confidences[q.id] ? log.confidences[q.id].rating : null,
+        confidence_scale: log.confidences[q.id] ? '1-7' : null,
+        confidence_rt_ms: log.confidences[q.id] ? log.confidences[q.id].rt_ms : null
       });
     });
     return { total: total, answered: answered, attempted: attempted, items: items };
@@ -1414,11 +1443,23 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   // Unlike the legacy SVG boxplot, this re-renders on every question because
   // each item may use a different chart. A missing image degrades to a
   // labelled placeholder rather than a broken-image icon.
+  var chartReady = !IS_VLAT_MODE;
+  var chartPreloads = {};
+  function preloadPracticeChart(index) {
+    if (index >= QUESTIONS.length) return;
+    var id = QUESTIONS[index].chartId;
+    if (!id || chartPreloads[id]) return;
+    var img = new Image();
+    img.decoding = 'async';
+    img.src = 'charts/' + id + '.png';
+    chartPreloads[id] = img;
+  }
   function renderVLATChart() {
     var holder = $('#chart-root');
     if (!holder) return;
     var q = currentQuestion();
     if (!q) { holder.innerHTML = ''; return; }
+    chartReady = false;
     // A chart-type label would disclose the answer to identification items.
     var title = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var paneHeader = root.querySelector('.rct-left .rct-pane-header');
@@ -1445,7 +1486,11 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       if (!holder.contains(img)) return; // A later question replaced this image.
       loading.style.display = 'none';
       img.style.display = 'block';
+      chartReady = true;
+      refreshSubmitState();
       postHeight();
+      preloadPracticeChart(log.current_question_index + 1);
+      preloadPracticeChart(log.current_question_index + 2);
     }
     img.addEventListener('load', function () {
       if (img.decode) img.decode().then(revealChart, revealChart);
@@ -1455,6 +1500,8 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       if (!holder.contains(img)) return;
       loading.style.display = 'none';
       missing.style.display = 'block';
+      chartReady = false;
+      refreshSubmitState();
       postHeight();
     });
     img.src = src;
@@ -1561,8 +1608,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     overlay.innerHTML =
       '<div class="rct-reflection-dialog" role="dialog" aria-modal="true" aria-labelledby="rct-reflection-title">' +
         '<h2 id="rct-reflection-title" class="rct-reflection-title">' + esc(t('reflection_title')) + '</h2>' +
-        '<p class="rct-reflection-prompt">' + esc(t('reflection_prompt')) + '</p>' +
-        '<label for="rct-reflection-text" class="rct-reflection-prompt">' + esc(t('reflection_text_prompt')) + '</label>' +
+        '<label for="rct-reflection-text" class="rct-reflection-prompt">' + esc(t('reflection_prompt')) + '</label>' +
         '<textarea id="rct-reflection-text" class="rct-reflection-text" maxlength="600"></textarea>' +
         '<label class="rct-reflection-tool"><input type="checkbox" id="rct-reflection-tool"/>' +
           '<span>' + esc(t('reflection_tool')) + '</span></label>' +
@@ -1607,6 +1653,56 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     textEl.focus();
   }
 
+  function showConfidenceModal(q) {
+    if (document.querySelector('.rct-confidence-overlay')) return;
+    var started = Date.now();
+    var overlay = document.createElement('div');
+    overlay.className = 'rct-reflection-overlay rct-confidence-overlay';
+    overlay.innerHTML =
+      '<div class="rct-reflection-dialog" role="dialog" aria-modal="true" aria-labelledby="rct-confidence-title">' +
+        '<h2 id="rct-confidence-title" class="rct-reflection-title">' + esc(t('confidence_title')) + '</h2>' +
+        '<output class="rct-confidence-value" id="rct-confidence-value">—</output>' +
+        '<input class="rct-confidence-slider" id="rct-confidence-slider" type="range" min="1" max="7" step="1" value="4" aria-labelledby="rct-confidence-title" />' +
+        '<div class="rct-confidence-ticks" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div>' +
+        '<div class="rct-confidence-anchors"><span>' + esc(t('confidence_low')) + '</span><span>' + esc(t('confidence_high')) + '</span></div>' +
+        '<button type="button" id="rct-confidence-continue" class="rct-button rct-button-primary" disabled>' + esc(t('confidence_continue')) + '</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    root.classList.add('is-reflecting');
+    root.setAttribute('aria-hidden', 'true');
+    var slider = overlay.querySelector('#rct-confidence-slider');
+    var value = overlay.querySelector('#rct-confidence-value');
+    var button = overlay.querySelector('#rct-confidence-continue');
+    var selected = null;
+    function choose() {
+      selected = Number(slider.value);
+      value.textContent = selected + ' / 7';
+      button.disabled = false;
+    }
+    slider.addEventListener('input', choose);
+    slider.addEventListener('pointerup', choose);
+    slider.addEventListener('keyup', function (event) {
+      if (/^(ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End|PageUp|PageDown)$/.test(event.key)) choose();
+    });
+    overlay.addEventListener('keydown', function (event) {
+      if (event.key !== 'Tab') return;
+      if (event.shiftKey && document.activeElement === slider) { event.preventDefault(); (button.disabled ? slider : button).focus(); }
+      else if (!event.shiftKey && document.activeElement === button) { event.preventDefault(); slider.focus(); }
+    });
+    button.addEventListener('click', function () {
+      if (selected === null) return;
+      log.confidences[q.id] = { rating: selected, rt_ms: Date.now() - started };
+      logEvent({ type: 'confidence_submitted', question_id: q.id, rating: selected, scale: '1-7', rt_ms: log.confidences[q.id].rt_ms });
+      persist();
+      overlay.remove();
+      root.classList.remove('is-reflecting');
+      root.removeAttribute('aria-hidden');
+      if (q.reflection) showReflectionModal(q);
+      else finalizeCurrentAnswer();
+    });
+    slider.focus();
+  }
+
   function currentAnswered() {
     var q = currentQuestion();
     if (!q || log.answers[q.id] == null) return false;
@@ -1625,7 +1721,10 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   function refreshSubmitState() {
     var btn = $('#rct-submit-final');
     if (!btn) return;
-    btn.disabled = !currentAnswered() || isFinalised();
+    btn.disabled = !currentAnswered() || !chartReady || isFinalised();
+    if (IS_VLAT_MODE) {
+      $$('#question-area input[type="radio"]').forEach(function (input) { input.disabled = !chartReady || isFinalised(); });
+    }
   }
 
   function isFinalised() {
@@ -1641,7 +1740,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   }
 
   function onAnswerChange(qid, value) {
-    if (isFinalised()) return;
+    if (isFinalised() || !chartReady) return;
     log.answers[qid] = value;
     logEvent({ type: 'answer_change', question_id: qid, value: value });
     persist();
@@ -1649,8 +1748,9 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   }
 
   function onSubmitCurrent() {
-    if (!currentAnswered() || isFinalised()) return;
+    if (!currentAnswered() || !chartReady || isFinalised()) return;
     var q = currentQuestion();
+    if (IS_VLAT_MODE) { showConfidenceModal(q); return; }
     if (q.reflection) {
       showReflectionModal(q);
       return;
@@ -1676,12 +1776,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       lockPanel();
       persist();
       postToParent({ type: 'rct_complete' });
-      var btn = $('#rct-submit-final');
-      if (btn) { btn.disabled = true; btn.textContent = t('submitted'); }
-      $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
-      var hint = $('.rct-submit-hint');
-      if (hint) hint.textContent = t('all_recorded');
-      postHeight();
+      showPracticeCompletion();
     } else {
       // Advance to the next question.
       log.current_question_index += 1;
@@ -1722,6 +1817,14 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       }
     }
     postHeight();
+    returnToChart();
+  }
+
+  function showPracticeCompletion() {
+    root.innerHTML = '<main class="rct-complete-screen" role="status" aria-live="polite">' +
+      '<h2>' + esc(t('complete_title')) + '</h2><p>' + esc(t('complete_message')) + '</p></main>';
+    postToParent({ type: 'rct_height', value: 480 });
+    returnToChart();
   }
 
   function lockPanel() {
@@ -2831,11 +2934,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
 
   if (isFinalised()) {
     lockPanel();
-    var btn = $('#rct-submit-final');
-    if (btn) { btn.disabled = true; btn.textContent = t('answer_submitted'); }
-    $$('input[type="radio"]').forEach(function (i) { i.disabled = true; });
-    var hint = $('.rct-submit-hint');
-    if (hint) hint.textContent = t('answer_recorded');
+    showPracticeCompletion();
     postToParent({ type: 'rct_complete' });
   }
 

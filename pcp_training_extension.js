@@ -1,6 +1,6 @@
 /* Eight source-authored PCP-literacy training prompts adapted from the
  * released Create and Analyze assessments. These are training-only: neither
- * appears in the immediate or delayed unaided outcome blocks. The final five
+ * appears in the immediate or delayed unaided outcome blocks. The final four
  * request a short explanation or tool-reliance declaration after the answer.
  *
  * Source wording: ml-pcp-literacy/assessments/Create.pdf and Analyze-FA.pdf.
@@ -57,7 +57,7 @@
       chartType: 'Parallel Coordinates', chartId: 'pcp_create_4',
       questionText: 'Name one of the two cereals with ratings less than 20.',
       questionText_de: 'Nennen Sie eine der zwei Cerealien mit einer Bewertung unter 20.',
-      questionFormat: 'mc', hasOmit: true, reflection: true,
+      questionFormat: 'mc', hasOmit: true,
       options: [
         { label: 'A', text: "Cap'n'Crunch", text_de: "Cap'n'Crunch" },
         { label: 'B', text: 'Honey Graham Ohs', text_de: 'Honey Graham Ohs' },

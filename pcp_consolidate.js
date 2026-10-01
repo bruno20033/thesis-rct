@@ -163,6 +163,9 @@
         id: it.id, raw_id: it.raw_id, chart_id: it.chart_id,
         chart_type: it.chart_type, format: it.format, answer: it.answer,
         reflection: it.reflection || null,
+        confidence_rating: it.confidence_rating == null ? null : it.confidence_rating,
+        confidence_scale: it.confidence_scale || null,
+        confidence_rt_ms: it.confidence_rt_ms == null ? null : it.confidence_rt_ms,
         time_ms: questionTime(evs),
         answer_ts: answerTs(evs),   // ADDITIVE (adoption latency)
         interaction: interaction

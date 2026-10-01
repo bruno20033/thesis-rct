@@ -283,6 +283,13 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       qThis.showNextButton();
     }
 
+    if (data.type === 'rct_scroll_top') {
+      var chartFrame = qThis.questionContainer && qThis.questionContainer.querySelector('iframe');
+      if (chartFrame && event.source === chartFrame.contentWindow) {
+        chartFrame.scrollIntoView({ block: 'start', behavior: 'auto' });
+      }
+    }
+
     if (data.type === 'rct_height' && typeof data.value === 'number') {
       // Clamp to a sane range to prevent any feedback-loop growth.
       // 600px floor leaves room for the chart + question + treatment;

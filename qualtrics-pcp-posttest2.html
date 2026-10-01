@@ -13,7 +13,7 @@
 
   Shows the 16 block:"posttest2" items from pcp_items_data.js (4 per Bloom level),
   one at a time, NO tool access. Records the participant's chosen option LETTER,
-  answer time, confidence (0–100%), confidence time, and timeout flag per item,
+  answer time, confidence (1–7), confidence time, and timeout flag per item,
   then posts them to the existing bridge. See OUTCOME_CONFIDENCE.md.
 
   NO ANSWER KEY ships here on purpose — this page is participant-facing and must
@@ -39,6 +39,15 @@
   /* Chart */
   .chart-container { text-align: center; margin-bottom: 24px; }
   .chart-container img { max-width: 760px; width: 100%; border: 1px solid #dee2e6; border-radius: 8px; cursor: zoom-in; }
+  .chart-loading { width: 100%; max-width: 760px; aspect-ratio: 1; margin: 0 auto;
+                   display: flex; flex-direction: column; align-items: center; justify-content: center;
+                   gap: 16px; background: #f8f9fa; border: 2px dashed #ced4da;
+                   border-radius: 8px; color: #495057; font-weight: 600; }
+  .chart-loading-spinner { width: 38px; height: 38px; border: 4px solid #d0ebff;
+                           border-top-color: #228be6; border-radius: 50%;
+                           animation: chart-spin .8s linear infinite; }
+  @keyframes chart-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .chart-loading-spinner { animation: none; } }
   .chart-placeholder { max-width: 760px; margin: 0 auto; padding: 60px 40px; background: #f8f9fa;
                         border: 2px dashed #ced4da; border-radius: 8px; color: #868e96; text-align: center; }
   .chart-placeholder .title { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 8px; }
@@ -70,17 +79,27 @@
   .options.locked .option { cursor: default; }
   .options.locked .option:not(.selected):hover { border-color: #e9ecef; background: #fff; }
 
-  /* Required confidence, displayed only after the answer is locked. */
-  .confidence-panel { border: 0; margin: 24px 0; min-width: 0; }
-  .confidence-panel legend { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
-  .confidence-options { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
-  .confidence-choice { display: flex; align-items: center; justify-content: center; gap: 6px;
-                       min-height: 48px; border: 1px solid #adb5bd; border-radius: 6px; cursor: pointer; }
-  .confidence-choice:has(input:checked) { background: #e7f5ff; border-color: #228be6; }
-  .confidence-choice:focus-within { outline: 2px solid #228be6; outline-offset: 2px; }
-  .confidence-anchors { margin-top: 12px; line-height: 1.5; color: #495057; }
+  /* The native modal makes the confirmed answer inert and contains keyboard focus. */
+  .confidence-panel { margin: auto; padding: 24px; border: 1px solid #dee2e6; border-radius: 12px;
+                      width: min(480px, calc(100% - 32px)); max-height: calc(100% - 32px);
+                      overflow: auto; color: #1a1a2e; box-shadow: 0 12px 48px rgba(0,0,0,.2); }
+  .confidence-panel::backdrop { background: rgba(20,30,40,.55); }
+  .confidence-panel h2 { font-size: 1.2rem; line-height: 1.4; margin-bottom: 12px; }
+  .confidence-help { color: #495057; line-height: 1.5; }
+  .confidence-value { display: block; margin: 20px 0 8px; min-height: 24px; text-align: center; font-weight: 600; }
+  .confidence-slider { display: block; width: 100%; height: 36px; appearance: none; -webkit-appearance: none; background: transparent; cursor: pointer; }
+  .confidence-slider::-webkit-slider-runnable-track { height: 6px; background: #ced4da; border-radius: 3px; }
+  .confidence-slider::-moz-range-track { height: 6px; background: #ced4da; border-radius: 3px; }
+  .confidence-slider::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 24px; height: 24px; margin-top: -9px; background: #228be6; border-radius: 50%; }
+  .confidence-slider::-moz-range-thumb { width: 24px; height: 24px; border: 0; background: #228be6; border-radius: 50%; }
+  .confidence-slider[data-unanswered]::-webkit-slider-thumb { opacity: 0; }
+  .confidence-slider[data-unanswered]::-moz-range-thumb { opacity: 0; }
+  .confidence-slider:focus-visible { outline: 2px solid #228be6; outline-offset: 4px; border-radius: 4px; }
+  .confidence-ticks { display: flex; justify-content: space-between; padding: 0 8px; color: #495057; font-variant-numeric: tabular-nums; }
+  .confidence-anchors { display: flex; justify-content: space-between; gap: 24px; margin: 8px 0 24px; line-height: 1.4; color: #495057; }
+  .confidence-anchors span { max-width: 45%; }
+  .confidence-anchors span:last-child { text-align: right; }
   @media (max-width: 560px) {
-    .confidence-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .progress-bar { width: 150px; }
   }
 
@@ -111,17 +130,23 @@
   <div id="chart-area" class="chart-container"></div>
   <div id="question-text" class="question-text"></div>
   <ul id="options-list" class="options"></ul>
-  <fieldset id="confidence-panel" class="confidence-panel" hidden aria-describedby="confidence-anchors">
-    <legend id="confidence-question" tabindex="-1"></legend>
-    <div id="confidence-options" class="confidence-options"></div>
-    <p id="confidence-anchors" class="confidence-anchors"></p>
-  </fieldset>
   <button id="btn-next" class="btn-next" disabled onclick="submitAnswer()">Next</button>
 </div>
 
+<dialog id="confidence-panel" class="confidence-panel" aria-labelledby="confidence-question" aria-describedby="confidence-help">
+  <h2 id="confidence-question" tabindex="-1"></h2>
+  <p id="confidence-help" class="confidence-help"></p>
+  <output id="confidence-value" class="confidence-value" for="confidence-slider"></output>
+  <input id="confidence-slider" class="confidence-slider" type="range" name="confidence" min="1" max="7" step="1" value="4"
+         data-unanswered aria-labelledby="confidence-question" aria-describedby="confidence-help confidence-anchors">
+  <div class="confidence-ticks" aria-hidden="true"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span></div>
+  <p id="confidence-anchors" class="confidence-anchors"><span id="confidence-low"></span><span id="confidence-high"></span></p>
+  <button id="btn-confidence" class="btn-next" disabled onclick="submitAnswer()">Next</button>
+</dialog>
+
 <div id="complete-screen" class="complete-screen" style="display:none">
   <h2 id="complete-title">Block Complete</h2>
-  <p id="complete-msg">Your responses have been recorded. Please wait…</p>
+  <p id="complete-msg">All answers recorded. Click the Next button at the bottom right to continue.</p>
 </div>
 
 <script src="pcp_items_data.js"></script>
@@ -143,14 +168,16 @@
   if (LANG !== 'DE') LANG = 'EN';
   try { document.documentElement.lang = LANG.toLowerCase(); } catch (e) {}
   var UI = {
-    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'Your responses have been recorded. Please wait…',
+    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'All answers recorded. Click the Next button at the bottom right to continue.',
       confirm: 'Confirm answer', instructions: 'Choose your best answer, even if you are unsure. After confirming it, you will rate how confident you are that it is correct.',
       locked: 'Your answer is confirmed and cannot be changed. Please rate your confidence to continue.',
-      confidence: 'How confident are you that your answer is correct?', anchors: '0% = not at all confident; 100% = completely confident' },
-    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Ihre Antworten wurden gespeichert. Bitte warten…',
+      confidence: 'How confident are you that your answer is correct?', low: 'Not at all confident', high: 'Very confident',
+      help: 'Move the slider or tap a position to choose your rating from 1 to 7.', unselected: 'No rating selected' },
+    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Alle Antworten wurden gespeichert. Klicken Sie unten rechts auf „Weiter“, um fortzufahren.',
       confirm: 'Antwort bestätigen', instructions: 'Wählen Sie die Ihrer Meinung nach beste Antwort, auch wenn Sie unsicher sind. Nach der Bestätigung geben Sie an, wie sicher Sie sind, dass Ihre Antwort richtig ist.',
       locked: 'Ihre Antwort wurde bestätigt und kann nicht mehr geändert werden. Geben Sie bitte an, wie sicher Sie sind, um fortzufahren.',
-      confidence: 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?', anchors: '0% = überhaupt nicht sicher; 100% = vollkommen sicher' }
+      confidence: 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?', low: 'Überhaupt nicht sicher', high: 'Sehr sicher',
+      help: 'Verschieben Sie den Regler oder tippen Sie auf eine Position, um Ihre Bewertung von 1 bis 7 auszuwählen.', unselected: 'Noch keine Bewertung ausgewählt' }
   };
   var L = UI[LANG] || UI.EN;
   // loc(obj, field): German variant obj[field + '_de'] (from pcp_items_de.js) when LANG==='DE', else English.
@@ -185,6 +212,8 @@
   var phase = 'answer', selectedConfidence = null, answerRt = null, confidenceStartTime = 0;
   var timerInterval = null, timeRemaining = TIME_LIMIT, blockStartTime = Date.now();
   var responses = [];
+  var chartReady = false;
+  var chartPreloads = {};
 
   // ── DOM refs ──
   var elCurrent = document.getElementById('q-current');
@@ -197,8 +226,31 @@
   var elNext = document.getElementById('btn-next');
   var elInstructions = document.getElementById('answer-instructions');
   var elConfidence = document.getElementById('confidence-panel');
-  var elConfidenceOptions = document.getElementById('confidence-options');
+  var elConfidenceSlider = document.getElementById('confidence-slider');
+  var elConfidenceValue = document.getElementById('confidence-value');
+  var elConfidenceNext = document.getElementById('btn-confidence');
   elTotal.textContent = String(items.length);
+
+  // A native range has a numeric midpoint even before a response. Only deliberate
+  // pointer/keyboard interaction records it; focus and the initial value do not.
+  elConfidence.addEventListener('cancel', function (e) { e.preventDefault(); });
+  // Wrap Tab explicitly because the modal is embedded in an iframe: browser
+  // focus must not move out to Qualtrics before the required rating is entered.
+  elConfidence.addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab') return;
+    var last = elConfidenceNext.disabled ? elConfidenceSlider : elConfidenceNext;
+    var active = document.activeElement;
+    if (e.shiftKey && (active === elConfidenceSlider || active.id === 'confidence-question')) {
+      e.preventDefault(); last.focus();
+    } else if (!e.shiftKey && active === last) {
+      e.preventDefault(); elConfidenceSlider.focus();
+    }
+  });
+  elConfidenceSlider.addEventListener('input', function () { window.selectConfidence(this.value); });
+  elConfidenceSlider.addEventListener('pointerup', function () { window.selectConfidence(this.value); });
+  elConfidenceSlider.addEventListener('keyup', function (e) {
+    if (/^(ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End|PageUp|PageDown)$/.test(e.key)) window.selectConfidence(this.value);
+  });
 
   // Localize static chrome (labels/buttons) per LANG.
   (function localizeChrome() {
@@ -209,11 +261,33 @@
     set('complete-title', L.complete);
     set('complete-msg', L.recorded);
     set('confidence-question', L.confidence);
-    set('confidence-anchors', L.anchors);
+    set('confidence-help', L.help);
+    set('confidence-low', L.low);
+    set('confidence-high', L.high);
+    set('btn-confidence', L.next);
   })();
 
   function post(msg) { try { window.parent.postMessage(msg, '*'); } catch (e) {} }
   function sendHeight() { post({ type: 'rct_height', value: document.body.scrollHeight }); }
+  function returnToChart() {
+    window.scrollTo(0, 0);
+    post({ type: 'rct_scroll_top' });
+  }
+  function preloadChart(index) {
+    if (index >= items.length) return;
+    var id = items[index].chartId;
+    if (chartPreloads[id]) return;
+    var preload = new Image();
+    preload.decoding = 'async';
+    preload.src = 'charts/' + id + '.png';
+    chartPreloads[id] = preload;
+  }
+  function setAnswersEnabled(enabled) {
+    var inputs = elOptions.querySelectorAll('input');
+    for (var i = 0; i < inputs.length; i++) inputs[i].disabled = !enabled;
+    elOptions.style.opacity = enabled ? '' : '0.55';
+  }
+
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 
@@ -231,10 +305,15 @@
     selectedConfidence = null;
     answerRt = null;
     phase = 'answer';
+    chartReady = false;
     elInstructions.textContent = L.instructions;
     elOptions.classList.remove('locked');
-    elConfidence.hidden = true;
-    elConfidenceOptions.innerHTML = '';
+    if (elConfidence.open) elConfidence.close();
+    elConfidenceSlider.value = '4';
+    elConfidenceSlider.setAttribute('data-unanswered', '');
+    elConfidenceSlider.setAttribute('aria-valuetext', L.unselected);
+    elConfidenceValue.textContent = L.unselected;
+    elConfidenceNext.disabled = true;
     elNext.textContent = L.confirm;
     elNext.disabled = true;
     elCurrent.textContent = String(currentIndex + 1);
@@ -245,9 +324,37 @@
     // or the missing-image placeholder: some items ask participants to identify it.
     var alt = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var imgPath = 'charts/' + item.chartId + '.png';
-    elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escAttr(alt) + '" ' +
-      'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' + escHtml(alt) +
-      '</div><div class=hint>[chart image not loaded — charts/' + escHtml(item.chartId) + '.png]</div></div>\'">';
+    elChart.innerHTML = '<div class="chart-loading" role="status" aria-live="polite">' +
+      '<span class="chart-loading-spinner" aria-hidden="true"></span><span>' +
+      (LANG === 'DE' ? 'Diagramm wird geladen…' : 'Loading chart…') + '</span></div>';
+    var loadingEl = elChart.firstChild;
+    var chartImg = new Image();
+    chartImg.alt = alt;
+    chartImg.decoding = 'async';
+    chartImg.fetchPriority = 'high';
+    function startWhenVisible() {
+      if (elChart.firstChild !== loadingEl || chartReady) return;
+      elChart.replaceChildren(chartImg);
+      chartReady = true;
+      setAnswersEnabled(true);
+      itemStartTime = Date.now();
+      startTimer();
+      sendHeight();
+      preloadChart(currentIndex + 1);
+      preloadChart(currentIndex + 2);
+    }
+    chartImg.addEventListener('load', function () {
+      if (chartImg.decode) chartImg.decode().then(startWhenVisible, startWhenVisible);
+      else startWhenVisible();
+    });
+    chartImg.addEventListener('error', function () {
+      if (elChart.firstChild !== loadingEl) return;
+      elChart.innerHTML = '<div class="chart-placeholder" role="alert"><div class="title">' +
+        escHtml(alt) + '</div><div class="hint">' +
+        (LANG === 'DE' ? 'Das Diagramm konnte nicht geladen werden. Bitte laden Sie die Seite erneut.' :
+          'The chart could not be loaded. Please reload this page.') + '</div></div>';
+      sendHeight();
+    });
 
     elQuestion.textContent = loc(item, 'questionText');
 
@@ -263,15 +370,14 @@
     }
     elOptions.innerHTML = html;
 
-    // Timer
-    itemStartTime = Date.now();
-    startTimer();
-
+    // Answers and the timer remain paused until the image has decoded.
+    setAnswersEnabled(false);
+    elTimer.textContent = '…';
+    clearInterval(timerInterval);
+    chartImg.src = imgPath;
     sendHeight();
-    var chartImg = elChart.querySelector('img');
-    if (chartImg) chartImg.addEventListener('load', sendHeight);
-    // Return keyboard/scroll focus from the confidence step to the new question.
-    if (currentIndex > 0) document.getElementById('question-progress').focus();
+    if (currentIndex > 0) returnToChart();
+    if (currentIndex > 0) document.getElementById('question-progress').focus({ preventScroll: true });
   }
 
   // ── Timer (disabled when TIME_LIMIT <= 0) ──
@@ -296,7 +402,7 @@
 
   // ── Selection / submit ──
   window.selectOption = function (el) {
-    if (phase !== 'answer' || !elOptions.contains(el)) return;
+    if (phase !== 'answer' || !chartReady || !elOptions.contains(el)) return;
     var opts = elOptions.querySelectorAll('.option');
     for (var i = 0; i < opts.length; i++) { opts[i].classList.remove('selected'); opts[i].querySelector('input').checked = false; }
     el.classList.add('selected');
@@ -305,11 +411,14 @@
     elNext.disabled = false;
   };
   window.selectConfidence = function (value) {
-    if (phase !== 'confidence' || !/^(0|[1-9][0-9]?|100)$/.test(String(value))) return;
+    if (phase !== 'confidence' || !/^[1-7]$/.test(String(value))) return;
     var n = Number(value);
-    if (n % 10 !== 0) return;
     selectedConfidence = n;
-    elNext.disabled = false;
+    elConfidenceSlider.value = String(n);
+    elConfidenceSlider.removeAttribute('data-unanswered');
+    elConfidenceSlider.setAttribute('aria-valuetext', n + ' ' + L.of + ' 7' + (n === 1 ? ': ' + L.low : n === 7 ? ': ' + L.high : ''));
+    elConfidenceValue.textContent = n + ' / 7';
+    elConfidenceNext.disabled = false;
   };
   window.submitAnswer = function () {
     if (phase === 'answer') {
@@ -322,16 +431,10 @@
       elOptions.classList.add('locked');
       var inputs = elOptions.querySelectorAll('input');
       for (var i = 0; i < inputs.length; i++) inputs[i].disabled = true;
-      var html = '';
-      for (var pct = 0; pct <= 100; pct += 10) {
-        html += '<label class="confidence-choice"><input type="radio" name="confidence" value="' + pct +
-          '" onchange="selectConfidence(this.value)"><span>' + pct + '%</span></label>';
-      }
-      elConfidenceOptions.innerHTML = html;
-      elConfidence.hidden = false;
       elInstructions.textContent = L.locked;
-      elNext.textContent = L.next;
       elNext.disabled = true;
+      elConfidenceNext.disabled = true;
+      elConfidence.showModal();
       document.getElementById('confidence-question').focus();
       sendHeight();
     } else if (phase === 'confidence' && selectedConfidence !== null) {
@@ -343,15 +446,16 @@
   function recordResponse(response, isTimeout) {
     if (phase !== (isTimeout ? 'answer' : 'confidence')) return;
     phase = 'recording';
+    if (elConfidence.open) elConfidence.close();
     var item = items[currentIndex];
     var rt = isTimeout ? Date.now() - itemStartTime : answerRt;
     var confidence = isTimeout ? null : selectedConfidence;
     var confidenceRt = isTimeout ? null : Date.now() - confidenceStartTime;
     var optionTexts = answerOptions(item).map(function (o) { return o.text; });
     responses.push({ itemId: item.id, response: response, rt: rt, timeout: isTimeout, chart_id: item.chartId, format: (item.questionFormat || 'mc'), questionText: item.questionText, options: optionTexts,
-      confidence_pct: confidence, confidence_rt_ms: confidenceRt, response_format: 'best_answer_confidence_v1' });
+      confidence_rating: confidence, confidence_scale: '1-7', confidence_rt_ms: confidenceRt, response_format: 'best_answer_confidence_likert7_v1' });
     post({ type: 'pcp_item_response', itemId: item.id, response: response, rt: rt, timeout: isTimeout, questionText: item.questionText, options: optionTexts,
-      confidence_pct: confidence, confidence_rt_ms: confidenceRt, response_format: 'best_answer_confidence_v1' });
+      confidence_rating: confidence, confidence_scale: '1-7', confidence_rt_ms: confidenceRt, response_format: 'best_answer_confidence_likert7_v1' });
     currentIndex++;
     if (currentIndex < items.length) renderItem(); else finishBlock();
   }
@@ -383,7 +487,7 @@
     // Authoritative blob for offline scoring (robust to shuffle): id + chosen label per item.
     ed['pcp_' + BLOCK + '_responses'] = JSON.stringify(responses.map(function (r) {
       return { id: r.itemId, chart_id: r.chart_id, format: r.format, answer: r.response, rt_ms: r.rt, timeout: r.timeout,
-        confidence_pct: r.confidence_pct, confidence_rt_ms: r.confidence_rt_ms, response_format: r.response_format };
+        confidence_rating: r.confidence_rating, confidence_scale: r.confidence_scale, confidence_rt_ms: r.confidence_rt_ms, response_format: r.response_format };
     }));
 
     post({ type: 'pcp_block_complete', block: BLOCK, total: items.length, itemsAnswered: answered,
@@ -392,7 +496,8 @@
 
     document.getElementById('quiz-container').style.display = 'none';
     document.getElementById('complete-screen').style.display = 'block';
-    sendHeight();
+    post({ type: 'rct_height', value: 480 });
+    returnToChart();
   }
 
   // ── Chart zoom ──
@@ -408,7 +513,10 @@
 
   // ── Start ──
   renderItem();
-  sendHeight();
+  post({ type: 'rct_ready' });
+  window.addEventListener('message', function (event) {
+    if (event.source === window.parent && event.data && event.data.type === 'rct_ready_probe') post({ type: 'rct_ready' });
+  });
 })();
 </script>
 

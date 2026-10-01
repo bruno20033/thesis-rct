@@ -19,10 +19,9 @@ into training.
 
 The first 12 training questions are shuffled. The four final items are fixed
 as `pcp_create_5`, `pcp_analyze_7`, `pcp_analyze_2`, and
-`pcp_analyze_4`. Before each of those four, participants either enter a
-brief account of their own reasoning or select “I relied mainly on the tool
-and cannot state my own reasoning.” They then choose their best substantive
-answer to the chart question, even when unsure.
+`pcp_analyze_4`. After confirming the answer and rating confidence on each
+of those four, participants either enter a brief account of their own reasoning
+or select “I relied mainly on the tool and cannot state my own reasoning.”
 
 All 16 training questions require a substantive answer in every arm (Search,
 Socratic LLM and unrestricted LLM). The renderer filters the original English
@@ -31,9 +30,11 @@ option to the added items. The eight released practice items retain their origin
 offline scoring keys, including historical omission keys. The added eight use
 the balanced letters documented above. An unsubmitted abstention
 restored from an older session cannot enable Next; the participant must select
-a currently available answer. No per-item training confidence scale is added.
+a currently available answer. Every training item now asks for a 1–7 confidence
+rating after the answer is confirmed. The rating and response time are saved
+in `vlat_train_responses` alongside each answer.
 The Mini-VLAT baseline retains its existing abstention option; the separate
-post-training PCS and outcome confidence procedures are unchanged.
+post-training PCS procedure is unchanged.
 
 Participant-facing chart labels are neutral ("Chart" / "Diagramm"). The
 training chart-type caption is removed, and training and both outcome pages

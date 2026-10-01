@@ -125,6 +125,10 @@ Qualtrics.SurveyEngine.addOnReady(function () {
       qThis.showNextButton();
     }
 
+    if (data.type === 'rct_scroll_top' && frame && event.source === frame.contentWindow) {
+      frame.scrollIntoView({ block: 'start', behavior: 'auto' });
+    }
+
     if (data.type === 'rct_height' && typeof data.value === 'number') {
       // Clamp to prevent feedback-loop growth: 600px floor, 1800px ceiling.
       var h = Math.max(600, Math.min(1800, data.value + 16));
