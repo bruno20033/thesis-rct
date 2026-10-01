@@ -107,6 +107,20 @@
   /* Cap the chart so a tall (portrait) image can't push the question and the
      submit button off-screen; object-fit preserves the aspect ratio. */
   .rct-chart-area .vlat-chart-img { max-height: 32vh; object-fit: contain; cursor: zoom-in; }
+  .vlat-chart-loading {
+    width: min(100%, 32vh); aspect-ratio: 1; margin: 0 auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+    border: 1px dashed #cfd8dc; border-radius: 4px; background: #f7fafc;
+    color: #546e7a; font-size: 14px; text-align: center;
+  }
+  .vlat-chart-loading-spinner {
+    width: 30px; height: 30px; border: 3px solid #dbe6ed;
+    border-top-color: #1976d2; border-radius: 50%; animation: vlat-chart-spin 0.8s linear infinite;
+  }
+  @keyframes vlat-chart-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .vlat-chart-loading-spinner { animation-duration: 2s; }
+  }
   #zoom-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.85);
                   z-index: 9999; align-items: center; justify-content: center; }
   #zoom-overlay.active { display: flex; }
@@ -639,6 +653,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       answer_recorded: 'Your answer has been recorded. Click Next to continue.',
       chat_unreachable: 'Could not reach the assistant: ',
       chart_unavailable: 'Chart image unavailable',
+      chart_loading: 'Loading chart…',
       placeholder_item: 'Placeholder item — scoring excluded',
       reflection_title: 'Before answering',
       reflection_prompt: 'Which statement best describes your own reasoning at this point?',
@@ -700,6 +715,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       answer_recorded: 'Ihre Antwort wurde gespeichert. Klicken Sie auf „Weiter", um fortzufahren.',
       chat_unreachable: 'Der Assistent ist nicht erreichbar: ',
       chart_unavailable: 'Diagrammbild nicht verfügbar',
+      chart_loading: 'Diagramm wird geladen…',
       placeholder_item: 'Platzhalter-Item — von der Bewertung ausgeschlossen',
       reflection_title: 'Vor der Antwort',
       reflection_prompt: 'Welche Aussage beschreibt Ihr eigenes Nachdenken zu diesem Zeitpunkt am besten?',
@@ -1392,12 +1408,35 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     var src = 'charts/' + q.chartId + '.png';
     holder.innerHTML =
       '<figure style="margin:0">' +
-        '<img class="vlat-chart-img" src="' + esc(src) + '" ' +
+        '<div class="vlat-chart-loading" role="status" aria-live="polite">' +
+          '<span class="vlat-chart-loading-spinner" aria-hidden="true"></span>' +
+          '<span>' + esc(t('chart_loading')) + '</span>' +
+        '</div>' +
+        '<img class="vlat-chart-img" ' +
              'alt="' + esc(title) + '" ' +
-             'style="width:100%;height:auto;display:block;border:1px solid #eceff1;border-radius:4px;background:#fff" ' +
-             'onerror="this.style.display=\'none\';var f=this.parentNode.querySelector(\'.vlat-chart-missing\');if(f)f.style.display=\'block\';" />' +
+             'style="width:100%;height:auto;display:none;border:1px solid #eceff1;border-radius:4px;background:#fff" />' +
         '<div class="vlat-chart-missing" style="display:none;padding:32px;text-align:center;color:#90a4ae;border:1px dashed #cfd8dc;border-radius:4px">' + esc(t('chart_unavailable')) + '<br/><code style="font-size:11px">charts/' + esc(q.chartId) + '.png</code></div>' +
       '</figure>';
+    var img = holder.querySelector('.vlat-chart-img');
+    var loading = holder.querySelector('.vlat-chart-loading');
+    var missing = holder.querySelector('.vlat-chart-missing');
+    function revealChart() {
+      if (!holder.contains(img)) return; // A later question replaced this image.
+      loading.style.display = 'none';
+      img.style.display = 'block';
+      postHeight();
+    }
+    img.addEventListener('load', function () {
+      if (img.decode) img.decode().then(revealChart, revealChart);
+      else revealChart();
+    });
+    img.addEventListener('error', function () {
+      if (!holder.contains(img)) return;
+      loading.style.display = 'none';
+      missing.style.display = 'block';
+      postHeight();
+    });
+    img.src = src;
     postHeight();
   }
 
