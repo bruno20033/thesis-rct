@@ -10,7 +10,7 @@ const released = require('./pcp_items_data.js');
 const additions = require('./pcp_training_extension.js');
 const {PCP_KEY, PCP_OMIT} = require('./pcp_scoring.js');
 const training = released.concat(additions).filter(it => it.block === 'practice');
-const reflectionIds = ['pcp_create_5', 'pcp_analyze_7', 'pcp_analyze_2', 'pcp_analyze_4'];
+const reflectionIds = training.filter(it => it.reflection).map(it => it.id);
 
 test('training removes explicit and appended abstentions without changing source keys', () => {
   const source = fs.readFileSync(path.join(__dirname, 'embed-pcp.html'), 'utf8');
@@ -30,7 +30,8 @@ test('training removes explicit and appended abstentions without changing source
     assert.equal(item.hasOmit, false, 'do not append a synthetic IDK option');
     assert.ok(item.options.some(o => o.key === PCP_KEY[item.raw_id]));
   }
-  assert.deepEqual(Array.from(mapped.slice(12), it => it.raw_id), reflectionIds);
+  assert.equal(reflectionIds.length, 5);
+  assert.deepEqual(Array.from(mapped.slice(-reflectionIds.length), it => it.raw_id), reflectionIds);
   assert.equal(JSON.stringify(training), snapshot, 'preserve the shared source banks');
 });
 
@@ -95,29 +96,16 @@ async function openTraining(t, condition, arm, lang) {
 
 for (const [condition, arm] of [['SEARCH',''],['LLM','unrestricted'],['LLM','socratic']]) {
   for (const lang of ['EN','DE']) {
-    test(`${condition} ${arm} ${lang}: 16 best answers, charts and four reflections survive the bridge`, async t => {
+    test(`${condition} ${arm} ${lang}: 16 best answers, charts and five reflections survive the bridge`, async t => {
       const {page, frame, errors} = await openTraining(t, condition, arm, lang);
       const seen = [];
       for (let i=0; i<16; i++) {
         assert.match(await frame.locator('.rct-question-progress').innerText(), new RegExp(`\\b${i+1}\\s+\\S+\\s+16\\b`));
         const src = await frame.locator('#chart-root img').getAttribute('src');
-        const item = training.find(it => src === `charts/${it.chartId}.png`);
+        const item = training.find(it => src.split('?')[0] === `charts/${it.chartId}.png`);
         assert.ok(item); seen.push(item.id);
         await frame.locator('#chart-root img').evaluate(img => img.decode());
         assert.ok(await frame.locator('#chart-root img').evaluate(img => img.complete && img.naturalWidth > 0));
-        if (i >= 12) {
-          assert.equal(item.id, reflectionIds[i-12]);
-          const next = frame.locator('#rct-reflection-continue');
-          assert.equal(await next.isDisabled(), true);
-          if (i % 2 === 0) {
-            await frame.locator('input[value="own_reasoning"]').check();
-            assert.equal(await next.isDisabled(), true, 'own reasoning requires text');
-            await frame.locator('#rct-reflection-text').fill('I compared the relevant axes and the selected lines.');
-          } else {
-            await frame.locator('input[value="tool_reliance"]').check();
-          }
-          await next.click();
-        }
         const options = frame.locator('#question-area .rct-question-options input');
         assert.deepEqual(await options.evaluateAll(inputs => inputs.map(input => input.value)),
           item.options.filter(o => o.text !== "I don't know").map(o => o.label));
@@ -125,6 +113,20 @@ for (const [condition, arm] of [['SEARCH',''],['LLM','unrestricted'],['LLM','soc
         assert.equal(await frame.locator('#rct-submit-final').isDisabled(), true);
         await frame.locator(`#question-area input[value="${PCP_KEY[item.id]}"]`).check();
         await frame.locator('#rct-submit-final').click();
+        if (i >= 16 - reflectionIds.length) {
+          assert.equal(item.id, reflectionIds[i - (16 - reflectionIds.length)]);
+          const next = frame.locator('#rct-reflection-continue');
+          await next.waitFor();
+          assert.equal(await next.isDisabled(), true);
+          if (i % 2 === 0) {
+            await frame.locator('#rct-reflection-text').fill('I compared the relevant axes and the selected lines.');
+          } else {
+            await frame.locator('#rct-reflection-tool').check();
+          }
+          assert.equal(await next.isDisabled(), false);
+          await next.click();
+          assert.equal(await frame.locator('.rct-reflection-overlay').count(), 0);
+        }
       }
       await page.waitForFunction(() => nextVisible);
       assert.equal(new Set(seen).size, 16);
@@ -137,7 +139,7 @@ for (const [condition, arm] of [['SEARCH',''],['LLM','unrestricted'],['LLM','soc
       for (const [i, row] of result.records.entries()) {
         assert.equal(row.answer, PCP_KEY[row.raw_id]);
         assert.equal(row.interaction.mode, condition === 'SEARCH' ? 'search' : 'llm');
-        if (i < 12) assert.equal(row.reflection, null);
+        if (i < 16 - reflectionIds.length) assert.equal(row.reflection, null);
         else {
           assert.equal(row.reflection.mode, i%2===0 ? 'own_reasoning' : 'tool_reliance');
           assert.equal(row.reflection.reasoning_text, i%2===0 ? 'I compared the relevant axes and the selected lines.' : null);
@@ -152,7 +154,7 @@ for (const kind of ['explicit', 'synthetic']) {
   test(`restored ${kind} abstention cannot enable training submission`, async t => {
     const {page, frame} = await openTraining(t, 'SEARCH', '', 'EN');
     const src = await frame.locator('#chart-root img').getAttribute('src');
-    const item = training.find(it => src === `charts/${it.chartId}.png`);
+    const item = training.find(it => src.split('?')[0] === `charts/${it.chartId}.png`);
     assert.ok(PCP_OMIT[item.id]);
     const value = kind === 'explicit' ? PCP_OMIT[item.id] : 'idk';
     await frame.evaluate(({id,value}) => {
