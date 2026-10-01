@@ -218,6 +218,7 @@ for (const block of ['posttest1', 'posttest2']) {
 
   test(`${block}: keyboard selection, confidence validation, and immutable submitted answer`, async t => {
     const {page, frame} = await openTest(t, block);
+    await waitChartReady(frame);
     await frame.locator('.option input').first().focus();
     await page.keyboard.press('Space');
     assert.equal(await frame.locator('#btn-next').isEnabled(), true);
