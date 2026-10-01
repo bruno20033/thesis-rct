@@ -22,8 +22,9 @@ rendered GitHub page.
 - `embed-pcp.html` hardcodes `PHASE='vlattrain'` and loads 16 training items itself:
   the 8 released `block:"practice"` PCP items plus 8 source-authored, training-only
   items. The final four require a reasoning/tool-reliance declaration before the
-  chart question. No `phase=`/`set=` params are needed. The 16-item immediate
-  and 16-item delayed outcome banks remain held out.
+  chart question. All training items require a best substantive answer, with
+  no “I don't know” option or per-item confidence scale. No `phase=`/`set=` params
+  are needed. The 16-item immediate and 16-item delayed outcome banks remain held out.
 - Post-tests ship **no answer key** (participant-facing). They store the chosen
   option **letter** per item; correctness is scored **offline** against
   `PCP_KEY` in `pcp_scoring.js`. Per-item time cap is `TIME_LIMIT=90s` (tunable at
@@ -47,7 +48,11 @@ Show: PCP Delayed post-test
 **Delayed post-test = a second session** — the one piece still needing a decision:
 platform (Prolific longitudinal re-invite vs email), interval (e.g. 7 days),
 reminder schedule, attrition handling. The `qualtrics-pcp-posttest2.html` renderer
-itself is ready and identical in behaviour to posttest 1.
+retains the existing 0–100% inline confidence procedure. The immediate test now
+uses a modal 1–7 slider (1 = Not at all confident; 7 = Very confident). Both retain
+16 best-answer items and a separate, untimed confidence step; see
+`OUTCOME_CONFIDENCE.md` for response formats. The existing bridge passes through
+the new immediate JSON fields without a Qualtrics edit.
 
 ## Embedded Data — one field per phase (reuses existing fields)
 

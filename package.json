@@ -1,0 +1,10 @@
+{
+  "name": "thesis-rct-checks",
+  "private": true,
+  "scripts": {
+    "test:outcomes": "node --test test_pcp_outcomes.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

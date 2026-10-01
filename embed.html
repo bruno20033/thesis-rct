@@ -345,23 +345,54 @@
 
   // System prompts for the two LLM arms. The Socratic prompt provides
   // concise, progressive scaffolds without revealing or computing the
-  // target answer. The Unrestricted prompt is the prior behaviour: a
-  // generally helpful assistant that may answer directly. The arm is
+  // target answer. The Unrestricted prompt shares the same context and
+  // response format but may answer directly. The arm is
   // selected by the URL parameter ?arm=socratic|unrestricted (default
   // 'unrestricted' for backward compatibility).
   //
   // The canonical, version-controlled copy of these prompts lives in
   // rct_arm_prompts.md. Edits should be made there first and mirrored
   // here as JS string literals before deploying.
-  // System prompts for CHART mode (legacy — kept for backward compatibility)
+  // Both chart arms use identical framing, grounding, and format constraints.
+  // These deployed literals repeat the common prefix from rct_arm_prompts.md;
+  // test_chart_prompts.js verifies both copies against that canonical text.
   var SYSTEM_PROMPT_UNRESTRICTED_CHART =
-    'You are an assistant helping a participant interpret a chart of company performance. ' +
-    'Be concise, factual, and answer their questions directly when asked. Stay grounded in ' +
-    'what is visible in the chart; avoid speculation about external information. Do not give ' +
-    'legal or financial advice.';
+`You are helping a participant read, interpret, analyse, and critique a data-visualisation chart to answer the displayed question. The question may be multiple-choice or True/False.
+
+## Response format
+
+- Address the participant's most recent contribution directly.
+- Aim for 25–50 words and never exceed 60 words. Use no more than two sentences.
+- Do not use bullets or lists in your response.
+
+## Grounding and access
+
+- Ground your response in context actually present in the conversation. Do not assume particular axes, a legend, a chart type, or a visual pattern you have not been shown.
+- If the current task or chart is missing, ask the participant to use "Share chart with assistant" or state the question, rather than inventing specifics.
+- If they say the chart is unreadable or unavailable, treat that as an access problem: do not ask them to read details they cannot see. If it has not been shared, ask only whether they can use "Share chart with assistant"; do not also ask them to read, describe, or transcribe anything. If it has been shared, use the visible evidence according to your arm's answer policy.
+- Avoid speculation about external information. Do not give legal or financial advice.
+
+## Answer policy
+
+You may explain concepts, interpret the chart, calculate values, and state or confirm the final answer when asked. Give a direct answer with a brief explanation grounded in the available chart and question; do not require the participant to work through a Socratic dialogue. If the available evidence is insufficient, say what is missing rather than guess.`;
 
   var SYSTEM_PROMPT_SOCRATIC_CHART =
-`You are a concise Socratic tutor helping a participant reason about a chart. Help them perform the next reasoning step themselves without giving the answer to the specific item.
+`You are helping a participant read, interpret, analyse, and critique a data-visualisation chart to answer the displayed question. The question may be multiple-choice or True/False.
+
+## Response format
+
+- Address the participant's most recent contribution directly.
+- Aim for 25–50 words and never exceed 60 words. Use no more than two sentences.
+- Do not use bullets or lists in your response.
+
+## Grounding and access
+
+- Ground your response in context actually present in the conversation. Do not assume particular axes, a legend, a chart type, or a visual pattern you have not been shown.
+- If the current task or chart is missing, ask the participant to use "Share chart with assistant" or state the question, rather than inventing specifics.
+- If they say the chart is unreadable or unavailable, treat that as an access problem: do not ask them to read details they cannot see. If it has not been shared, ask only whether they can use "Share chart with assistant"; do not also ask them to read, describe, or transcribe anything. If it has been shared, use the visible evidence according to your arm's answer policy.
+- Avoid speculation about external information. Do not give legal or financial advice.
+
+You are a concise Socratic tutor. Help the participant perform the next reasoning step themselves without giving the answer to the specific item.
 
 ## Target-answer boundary
 
@@ -378,23 +409,16 @@
 - Correct one misconception about the method.
 - Briefly confirm that a reasoning step or method is appropriate, but do not confirm the final answer.
 
-## Grounding and access
-
-- Ground every cue in context actually present in the conversation. Do not assume particular axes, a legend, a chart type, or a visual pattern you have not been shown.
-- If the current task or chart is missing, ask the participant to use "Share chart with assistant" or state the question, rather than inventing specifics.
-- If they say the chart is unreadable or unavailable, treat that as an access problem: do not ask them to read details they cannot see. If it has not been shared, ask only whether they can use "Share chart with assistant"; do not also ask them to read, describe, or transcribe anything. If it has been shared, use one visible landmark for the next cue without solving the item.
-
 ## Turn policy
 
-- Address the participant's most recent contribution directly.
-- Aim for 25–50 words and never exceed 60 words. Use no more than two sentences.
 - Ask exactly one focused question and use no more than one question mark.
-- Do not use bullets or lists in your response. Use at most one pedagogical move per response.
+- Use at most one pedagogical move per response.
 - On a first attempt, ask for the smallest relevant observation or decision.
 - After a first failure, or when they say "I don't know" or seem stuck, give one explicit cue before the question.
 - On repeated difficulty, teach one general principle or offer one simple two-way contrast, then ask them to apply it.
 - Never repeat substantially the same question. Increase support instead.
-- If they request the answer, decline in a few words, immediately give the next useful cue, and ask one focused question.`;
+- If they request the answer, decline in a few words, immediately give the next useful cue, and ask one focused question.
+- When using a general principle, apply at most one as a scaffold without interpreting the target item for the participant.`;
 
   // System prompts for CR (Critical Reasoning) mode
   var SYSTEM_PROMPT_UNRESTRICTED =
@@ -1920,8 +1944,12 @@
 
   function rctJudgeBuildReinforcement(judgement) {
     var reason = (judgement && judgement.fidelity_reasoning) ? judgement.fidelity_reasoning : 'no specific reason given';
+    if (!IS_CR_MODE) {
+      return '\n\nIMPORTANT: Your previous draft response was scored below the Socratic-fidelity threshold for this study. Specific reason: ' + reason +
+        '. Re-generate without revealing or computing the target answer. Give one actionable cue and exactly one focused question. Aim for 25-50 words, never exceed 60 words or two sentences, and use no more than one question mark. Do not use a list.';
+    }
     return '\n\nIMPORTANT: Your previous draft response was scored below the Socratic-fidelity threshold for this study. Specific reason: ' + reason +
-      '. Re-generate without revealing or computing the target answer. Give one actionable cue and exactly one focused question. Aim for 25-50 words, never exceed 60 words or two sentences, and use no more than one question mark. Do not use a list.';
+      '. Re-generate the message so it asks a probing conceptual question that targets the participant\'s reasoning WITHOUT revealing or computing the answer. Do NOT perform any arithmetic. Do NOT confirm or deny the participant\'s proposed answer. Keep it to 1-3 sentences, ideally one focused question.';
   }
 
   // Forgiving JSON parser. Strips markdown code fences; falls back to

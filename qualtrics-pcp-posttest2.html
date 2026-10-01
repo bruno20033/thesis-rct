@@ -13,7 +13,8 @@
 
   Shows the 16 block:"posttest2" items from pcp_items_data.js (4 per Bloom level),
   one at a time, NO tool access. Records the participant's chosen option LETTER,
-  reaction time, and timeout flag per item, then posts them to the bridge.
+  answer time, confidence (0–100%), confidence time, and timeout flag per item,
+  then posts them to the existing bridge. See OUTCOME_CONFIDENCE.md.
 
   NO ANSWER KEY ships here on purpose — this page is participant-facing and must
   not expose correct answers. Correctness is scored OFFLINE from pcp_<id>_response
@@ -55,6 +56,7 @@
 
   /* Question */
   .question-text { font-size: 1.15rem; line-height: 1.5; margin-bottom: 20px; font-weight: 500; }
+  .instructions { color: #495057; line-height: 1.5; margin-bottom: 16px; }
 
   /* Options */
   .options { list-style: none; margin-bottom: 20px; }
@@ -65,6 +67,22 @@
   .option input[type="radio"] { margin-right: 12px; width: 18px; height: 18px; cursor: pointer; }
   .option label { cursor: pointer; flex: 1; font-size: 1rem; }
   .option .label-key { font-weight: 700; color: #228be6; margin-right: 8px; }
+  .options.locked .option { cursor: default; }
+  .options.locked .option:not(.selected):hover { border-color: #e9ecef; background: #fff; }
+
+  /* Required confidence, displayed only after the answer is locked. */
+  .confidence-panel { border: 0; margin: 24px 0; min-width: 0; }
+  .confidence-panel legend { font-size: 1.1rem; font-weight: 600; margin-bottom: 12px; }
+  .confidence-options { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+  .confidence-choice { display: flex; align-items: center; justify-content: center; gap: 6px;
+                       min-height: 48px; border: 1px solid #adb5bd; border-radius: 6px; cursor: pointer; }
+  .confidence-choice:has(input:checked) { background: #e7f5ff; border-color: #228be6; }
+  .confidence-choice:focus-within { outline: 2px solid #228be6; outline-offset: 2px; }
+  .confidence-anchors { margin-top: 12px; line-height: 1.5; color: #495057; }
+  @media (max-width: 560px) {
+    .confidence-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+    .progress-bar { width: 150px; }
+  }
 
   /* Next button */
   .btn-next { display: block; margin: 0 auto; padding: 12px 48px; font-size: 1rem; font-weight: 600;
@@ -83,15 +101,21 @@
 <div id="quiz-container">
   <div class="top-bar">
     <div>
-      <div class="progress"><span id="lbl-question">Question</span> <span id="q-current">1</span> <span id="lbl-of">of</span> <span id="q-total">?</span></div>
+      <div id="question-progress" class="progress" tabindex="-1"><span id="lbl-question">Question</span> <span id="q-current">1</span> <span id="lbl-of">of</span> <span id="q-total">?</span></div>
       <div class="progress-bar"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
     </div>
     <div id="timer" class="timer"></div>
   </div>
 
+  <p id="answer-instructions" class="instructions"></p>
   <div id="chart-area" class="chart-container"></div>
   <div id="question-text" class="question-text"></div>
   <ul id="options-list" class="options"></ul>
+  <fieldset id="confidence-panel" class="confidence-panel" hidden aria-describedby="confidence-anchors">
+    <legend id="confidence-question" tabindex="-1"></legend>
+    <div id="confidence-options" class="confidence-options"></div>
+    <p id="confidence-anchors" class="confidence-anchors"></p>
+  </fieldset>
   <button id="btn-next" class="btn-next" disabled onclick="submitAnswer()">Next</button>
 </div>
 
@@ -119,8 +143,14 @@
   if (LANG !== 'DE') LANG = 'EN';
   try { document.documentElement.lang = LANG.toLowerCase(); } catch (e) {}
   var UI = {
-    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'Your responses have been recorded. Please wait…' },
-    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Ihre Antworten wurden gespeichert. Bitte warten…' }
+    EN: { question: 'Question', of: 'of', next: 'Next', complete: 'Block Complete', recorded: 'Your responses have been recorded. Please wait…',
+      confirm: 'Confirm answer', instructions: 'Choose your best answer, even if you are unsure. After confirming it, you will rate how confident you are that it is correct.',
+      locked: 'Your answer is confirmed and cannot be changed. Please rate your confidence to continue.',
+      confidence: 'How confident are you that your answer is correct?', anchors: '0% = not at all confident; 100% = completely confident' },
+    DE: { question: 'Frage', of: 'von', next: 'Weiter', complete: 'Block abgeschlossen', recorded: 'Ihre Antworten wurden gespeichert. Bitte warten…',
+      confirm: 'Antwort bestätigen', instructions: 'Wählen Sie die Ihrer Meinung nach beste Antwort, auch wenn Sie unsicher sind. Nach der Bestätigung geben Sie an, wie sicher Sie sind, dass Ihre Antwort richtig ist.',
+      locked: 'Ihre Antwort wurde bestätigt und kann nicht mehr geändert werden. Geben Sie bitte an, wie sicher Sie sind, um fortzufahren.',
+      confidence: 'Wie sicher sind Sie, dass Ihre Antwort richtig ist?', anchors: '0% = überhaupt nicht sicher; 100% = vollkommen sicher' }
   };
   var L = UI[LANG] || UI.EN;
   // loc(obj, field): German variant obj[field + '_de'] (from pcp_items_de.js) when LANG==='DE', else English.
@@ -152,6 +182,7 @@
 
   // ── State ──
   var currentIndex = 0, selectedResponse = null, itemStartTime = 0;
+  var phase = 'answer', selectedConfidence = null, answerRt = null, confidenceStartTime = 0;
   var timerInterval = null, timeRemaining = TIME_LIMIT, blockStartTime = Date.now();
   var responses = [];
 
@@ -164,6 +195,9 @@
   var elQuestion = document.getElementById('question-text');
   var elOptions = document.getElementById('options-list');
   var elNext = document.getElementById('btn-next');
+  var elInstructions = document.getElementById('answer-instructions');
+  var elConfidence = document.getElementById('confidence-panel');
+  var elConfidenceOptions = document.getElementById('confidence-options');
   elTotal.textContent = String(items.length);
 
   // Localize static chrome (labels/buttons) per LANG.
@@ -174,6 +208,8 @@
     set('btn-next', L.next);
     set('complete-title', L.complete);
     set('complete-msg', L.recorded);
+    set('confidence-question', L.confidence);
+    set('confidence-anchors', L.anchors);
   })();
 
   function post(msg) { try { window.parent.postMessage(msg, '*'); } catch (e) {} }
@@ -181,17 +217,33 @@
   function escHtml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
   function escAttr(s) { return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
 
+  // Filter only the explicit abstention in these outcome pages. Keep the shared
+  // bank and original option letters intact (training and legacy scoring use them).
+  // Match the base English text so the filter is independent of the DE overlay.
+  function answerOptions(item) {
+    return item.options.filter(function (o) { return o.text !== "I don't know"; });
+  }
+
   // ── Render current item ──
   function renderItem() {
     var item = items[currentIndex];
     selectedResponse = null;
+    selectedConfidence = null;
+    answerRt = null;
+    phase = 'answer';
+    elInstructions.textContent = L.instructions;
+    elOptions.classList.remove('locked');
+    elConfidence.hidden = true;
+    elConfidenceOptions.innerHTML = '';
+    elNext.textContent = L.confirm;
     elNext.disabled = true;
     elCurrent.textContent = String(currentIndex + 1);
     elProgressFill.style.width = ((currentIndex / items.length) * 100) + '%';
 
     // Chart image (axis titles + chart; prompt & options cropped off — the prompt is
-    // shown as separate text below). alt = chart type.
-    var alt = item.chartType || 'chart';
+    // shown as separate text below). Do not disclose the chart type in alt text
+    // or the missing-image placeholder: some items ask participants to identify it.
+    var alt = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var imgPath = 'charts/' + item.chartId + '.png';
     elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escAttr(alt) + '" ' +
       'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' + escHtml(alt) +
@@ -199,10 +251,11 @@
 
     elQuestion.textContent = loc(item, 'questionText');
 
-    // Options — render the instrument's own options only (no appended "don't know").
+    // Substantive options retain their original letters and order.
     var html = '';
-    for (var i = 0; i < item.options.length; i++) {
-      var opt = item.options[i];
+    var options = answerOptions(item);
+    for (var i = 0; i < options.length; i++) {
+      var opt = options[i];
       html += '<li class="option" data-value="' + escAttr(opt.label) + '" onclick="selectOption(this)">';
       html += '<input type="radio" name="answer" id="opt_' + i + '">';
       html += '<label for="opt_' + i + '"><span class="label-key">' + escHtml(opt.label) + '</span>' + escHtml(loc(opt, 'text')) + '</label>';
@@ -217,6 +270,8 @@
     sendHeight();
     var chartImg = elChart.querySelector('img');
     if (chartImg) chartImg.addEventListener('load', sendHeight);
+    // Return keyboard/scroll focus from the confidence step to the new question.
+    if (currentIndex > 0) document.getElementById('question-progress').focus();
   }
 
   // ── Timer (disabled when TIME_LIMIT <= 0) ──
@@ -230,6 +285,7 @@
     timerInterval = setInterval(tickTimer, 1000);
   }
   function tickTimer() {
+    if (phase !== 'answer') return;
     timeRemaining--;
     elTimer.textContent = timeRemaining + 's';
     if (timeRemaining <= 5) elTimer.className = 'timer critical';
@@ -240,6 +296,7 @@
 
   // ── Selection / submit ──
   window.selectOption = function (el) {
+    if (phase !== 'answer' || !elOptions.contains(el)) return;
     var opts = elOptions.querySelectorAll('.option');
     for (var i = 0; i < opts.length; i++) { opts[i].classList.remove('selected'); opts[i].querySelector('input').checked = false; }
     el.classList.add('selected');
@@ -247,21 +304,61 @@
     selectedResponse = el.getAttribute('data-value');
     elNext.disabled = false;
   };
-  window.submitAnswer = function () { if (!selectedResponse) return; clearInterval(timerInterval); recordResponse(selectedResponse, false); };
+  window.selectConfidence = function (value) {
+    if (phase !== 'confidence' || !/^(0|[1-9][0-9]?|100)$/.test(String(value))) return;
+    var n = Number(value);
+    if (n % 10 !== 0) return;
+    selectedConfidence = n;
+    elNext.disabled = false;
+  };
+  window.submitAnswer = function () {
+    if (phase === 'answer') {
+      if (!selectedResponse) return;
+      clearInterval(timerInterval);
+      answerRt = Date.now() - itemStartTime;
+      phase = 'confidence';
+      confidenceStartTime = Date.now();
+      elTimer.style.display = 'none';
+      elOptions.classList.add('locked');
+      var inputs = elOptions.querySelectorAll('input');
+      for (var i = 0; i < inputs.length; i++) inputs[i].disabled = true;
+      var html = '';
+      for (var pct = 0; pct <= 100; pct += 10) {
+        html += '<label class="confidence-choice"><input type="radio" name="confidence" value="' + pct +
+          '" onchange="selectConfidence(this.value)"><span>' + pct + '%</span></label>';
+      }
+      elConfidenceOptions.innerHTML = html;
+      elConfidence.hidden = false;
+      elInstructions.textContent = L.locked;
+      elNext.textContent = L.next;
+      elNext.disabled = true;
+      document.getElementById('confidence-question').focus();
+      sendHeight();
+    } else if (phase === 'confidence' && selectedConfidence !== null) {
+      recordResponse(selectedResponse, false);
+    }
+  };
 
   // ── Record + advance ──
   function recordResponse(response, isTimeout) {
+    if (phase !== (isTimeout ? 'answer' : 'confidence')) return;
+    phase = 'recording';
     var item = items[currentIndex];
-    var rt = Date.now() - itemStartTime;
-    var optionTexts = item.options.map(function (o) { return o.text; });
-    responses.push({ itemId: item.id, response: response, rt: rt, timeout: isTimeout, chart_id: item.chartId, format: (item.questionFormat || 'mc'), questionText: item.questionText, options: optionTexts });
-    post({ type: 'pcp_item_response', itemId: item.id, response: response, rt: rt, timeout: isTimeout, questionText: item.questionText, options: optionTexts });
+    var rt = isTimeout ? Date.now() - itemStartTime : answerRt;
+    var confidence = isTimeout ? null : selectedConfidence;
+    var confidenceRt = isTimeout ? null : Date.now() - confidenceStartTime;
+    var optionTexts = answerOptions(item).map(function (o) { return o.text; });
+    responses.push({ itemId: item.id, response: response, rt: rt, timeout: isTimeout, chart_id: item.chartId, format: (item.questionFormat || 'mc'), questionText: item.questionText, options: optionTexts,
+      confidence_pct: confidence, confidence_rt_ms: confidenceRt, response_format: 'best_answer_confidence_v1' });
+    post({ type: 'pcp_item_response', itemId: item.id, response: response, rt: rt, timeout: isTimeout, questionText: item.questionText, options: optionTexts,
+      confidence_pct: confidence, confidence_rt_ms: confidenceRt, response_format: 'best_answer_confidence_v1' });
     currentIndex++;
     if (currentIndex < items.length) renderItem(); else finishBlock();
   }
 
   // ── Finish block ──
   function finishBlock() {
+    phase = 'complete';
     clearInterval(timerInterval);
     var totalTime = Date.now() - blockStartTime;
     var answered = responses.filter(function (r) { return r.response !== 'timeout'; }).length;
@@ -284,7 +381,10 @@
     ed['pcp_' + BLOCK + '_total'] = String(items.length);
     ed['pcp_' + BLOCK + '_lang'] = LANG;
     // Authoritative blob for offline scoring (robust to shuffle): id + chosen label per item.
-    ed['pcp_' + BLOCK + '_responses'] = JSON.stringify(responses.map(function (r) { return { id: r.itemId, chart_id: r.chart_id, format: r.format, answer: r.response, rt_ms: r.rt, timeout: r.timeout }; }));
+    ed['pcp_' + BLOCK + '_responses'] = JSON.stringify(responses.map(function (r) {
+      return { id: r.itemId, chart_id: r.chart_id, format: r.format, answer: r.response, rt_ms: r.rt, timeout: r.timeout,
+        confidence_pct: r.confidence_pct, confidence_rt_ms: r.confidence_rt_ms, response_format: r.response_format };
+    }));
 
     post({ type: 'pcp_block_complete', block: BLOCK, total: items.length, itemsAnswered: answered,
            attempted: attempted, totalTime: totalTime, order: itemOrder, embeddedData: ed });

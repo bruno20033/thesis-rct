@@ -21,8 +21,25 @@ The first 12 training questions are shuffled. The four final items are fixed
 as `pcp_create_5`, `pcp_analyze_7`, `pcp_analyze_2`, and
 `pcp_analyze_4`. Before each of those four, participants either enter a
 brief account of their own reasoning or select “I relied mainly on the tool
-and cannot state my own reasoning.” They then answer the chart question in
-the normal way, including the standard “I don't know” response.
+and cannot state my own reasoning.” They then choose their best substantive
+answer to the chart question, even when unsure.
+
+All 16 training questions require a substantive answer in every arm (Search,
+Socratic LLM and unrestricted LLM). The renderer filters the original English
+“I don't know” option before localization and does not append an abstention
+option to the added items. Original answer letters and offline scoring keys
+are preserved, including historical omission keys. An unsubmitted abstention
+restored from an older session cannot enable Next; the participant must select
+a currently available answer. No per-item training confidence scale is added.
+The Mini-VLAT baseline retains its existing abstention option; the separate
+post-training PCS and outcome confidence procedures are unchanged.
+
+Participant-facing chart labels are neutral ("Chart" / "Diagramm"). The
+training chart-type caption is removed, and training and both outcome pages
+use neutral image alternative text, including enlarged images and missing-image
+placeholders. This prevents the interface from supplying the answer to chart-type
+identification questions. Item wording, source metadata and scoring keys remain
+unchanged.
 
 The reasoning record is stored in the existing `vlat_train_responses` JSON
 as `{mode, reasoning_text}`; Qualtrics Survey Flow needs no additional
