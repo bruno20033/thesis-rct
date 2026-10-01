@@ -4,6 +4,12 @@ This directory holds all chart images used by the VLAT and Mini-VLAT survey page
 
 ## Mini-VLAT V2 Charts (12 images)
 
+The survey loads lossless `.webp` versions first and falls back to the original
+`.png` files if WebP is unavailable. The 12 WebP files total about 608 KiB versus
+1.5 MiB for PNG, and were checked to decode pixel-identically. The baseline timer
+starts only after each chart is decoded; the next two charts preload in the
+background. Keep both formats together when deploying.
+
 Downloaded from the [Mini-VLAT V2 repository](https://github.com/washuvis/minivlat/tree/main/charts) (Pandey & Ottley, 2023).
 
 | File | Chart Type | Item ID | Title |

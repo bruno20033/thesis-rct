@@ -153,6 +153,18 @@
   var timeRemaining = TIME_LIMIT;
   var blockStartTime = Date.now();
   var responses = []; // { itemId, response, rt, timeout, questionText, options }
+  var chartPreloads = {};
+  var chartReady = false;
+
+  function preloadChart(index) {
+    if (index >= items.length) return;
+    var id = items[index].chartId;
+    if (chartPreloads[id]) return;
+    var image = new Image();
+    image.decoding = 'async';
+    image.src = 'charts/' + id + '.webp';
+    chartPreloads[id] = image;
+  }
 
   // ── DOM refs ──
   var elCurrent = document.getElementById('q-current');
@@ -192,6 +204,7 @@
   function renderItem() {
     var item = items[currentIndex];
     selectedResponse = null;
+    chartReady = false;
     elNext.disabled = true;
     elCurrent.textContent = String(currentIndex + 1);
     elProgressFill.style.width = ((currentIndex / items.length) * 100) + '%';
@@ -199,11 +212,54 @@
     // Chart
     var chartInfo = MINIVLAT_CHARTS[item.chartId];
     var chartTitle = chartInfo ? loc(chartInfo, 'title') : item.chartId;
-    var imgPath = 'charts/' + item.chartId + '.png';
-
-    elChart.innerHTML = '<img src="' + imgPath + '" alt="' + escHtml(chartTitle) + '" ' +
-      'onerror="this.parentNode.innerHTML=\'<div class=chart-placeholder><div class=title>' +
-      escHtml(chartTitle) + '</div><div class=hint>[' + escHtml(t('chartFail')) + escHtml(item.chartType) + ']</div></div>\'">';
+    var chartImg = document.createElement('img');
+    chartImg.alt = chartTitle;
+    chartImg.decoding = 'async';
+    chartImg.fetchPriority = 'high';
+    elChart.replaceChildren(chartImg);
+    var fallbackTried = false;
+    function startWhenVisible() {
+      if (chartReady || elChart.firstChild !== chartImg) return;
+      chartReady = true;
+      elOptions.style.pointerEvents = '';
+      elOptions.style.opacity = '';
+      itemStartTime = Date.now();
+      timeRemaining = TIME_LIMIT;
+      elTimer.textContent = TIME_LIMIT + 's';
+      elTimer.className = 'timer';
+      clearInterval(timerInterval);
+      timerInterval = setInterval(tickTimer, 1000);
+      sendHeight();
+      preloadChart(currentIndex + 1);
+      preloadChart(currentIndex + 2);
+    }
+    chartImg.addEventListener('load', function () {
+      // A loaded image may still be decoding; give every participant the full
+      // 25 seconds with the chart actually ready to paint.
+      if (chartImg.decode) chartImg.decode().then(startWhenVisible, startWhenVisible);
+      else startWhenVisible();
+    });
+    chartImg.addEventListener('error', function () {
+      if (!fallbackTried) {
+        fallbackTried = true;
+        chartImg.src = 'charts/' + item.chartId + '.png';
+        return;
+      }
+      elChart.innerHTML = '<div class="chart-placeholder"><div class="title">' +
+        escHtml(chartTitle) + '</div><div class="hint">[' +
+        escHtml(t('chartFail')) + escHtml(item.chartType) + ']</div></div>';
+      // Preserve the old fail-open behaviour if both image formats are absent.
+      chartReady = true;
+      elOptions.style.pointerEvents = '';
+      elOptions.style.opacity = '';
+      itemStartTime = Date.now();
+      timeRemaining = TIME_LIMIT;
+      elTimer.textContent = TIME_LIMIT + 's';
+      clearInterval(timerInterval);
+      timerInterval = setInterval(tickTimer, 1000);
+      sendHeight();
+    });
+    chartImg.src = 'charts/' + item.chartId + '.webp';
 
     // Question
     elQuestion.textContent = loc(item, 'questionText');
@@ -224,19 +280,14 @@
     html += '</li>';
     elOptions.innerHTML = html;
 
-    // Start timer
-    itemStartTime = Date.now();
-    timeRemaining = TIME_LIMIT;
-    elTimer.textContent = TIME_LIMIT + 's';
-    elTimer.className = 'timer';
+    // Keep answers and the clock paused until the chart has decoded.
+    elOptions.style.pointerEvents = 'none';
+    elOptions.style.opacity = '0.55';
+    elTimer.textContent = '…';
     clearInterval(timerInterval);
-    timerInterval = setInterval(tickTimer, 1000);
 
-    // Re-measure & report height for THIS item so the iframe grows enough to keep
-    // the Next button reachable. The chart <img> loads async, so re-report on load.
+    // Re-measure after chart decode as its aspect ratio affects iframe height.
     sendHeight();
-    var chartImg = elChart.querySelector('img');
-    if (chartImg) { chartImg.addEventListener('load', sendHeight); }
   }
 
   // ── Timer ──
@@ -255,6 +306,7 @@
 
   // ── Option selection ──
   window.selectOption = function (el) {
+    if (!chartReady) return;
     // Deselect all
     var opts = elOptions.querySelectorAll('.option');
     for (var i = 0; i < opts.length; i++) {
