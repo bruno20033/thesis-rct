@@ -27,8 +27,9 @@ answer to the chart question, even when unsure.
 All 16 training questions require a substantive answer in every arm (Search,
 Socratic LLM and unrestricted LLM). The renderer filters the original English
 “I don't know” option before localization and does not append an abstention
-option to the added items. Original answer letters and offline scoring keys
-are preserved, including historical omission keys. An unsubmitted abstention
+option to the added items. The eight released practice items retain their original answer letters and
+offline scoring keys, including historical omission keys. The added eight use
+the balanced letters documented above. An unsubmitted abstention
 restored from an older session cannot enable Next; the participant must select
 a currently available answer. No per-item training confidence scale is added.
 The Mini-VLAT baseline retains its existing abstention option; the separate
