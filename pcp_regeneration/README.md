@@ -61,10 +61,12 @@ the remaining visual or semantic equivalence claims.
 
 ## Provenance distinction
 
-Thirty-four currently generated items are source-pinned candidates: the input
+Thirty-four released-assessment items are source-pinned candidates: the input
 table is pinned and validated in `sources.json`. This verifies their public
 data provenance, but not yet the original's row selection, chart transformation
-or measurement equivalence. Six others are high-resolution,
+or measurement equivalence. The eight added training items are also
+source-pinned and are already served at high resolution. Six released items
+are high-resolution,
 deterministic structural redraws of assessment illustrations whose original
 tables were not included in the public BTPL release. They are identified under
 `structural_reconstructions` in `out/validation.json` and **must not** replace
@@ -73,6 +75,9 @@ measurement equivalence.
 
 See [SOURCE_RECOVERY.md](SOURCE_RECOVERY.md) for the public-source audit and
 the exact material needed to clear those six items.
+See [SOURCE_MAP.md](SOURCE_MAP.md) for the released items' candidate source
+mapping and the distinction between public source data and the unreleased
+per-item chart-generation settings.
 
 ### Recovered transformation: Coal Disaster / `pcp_und_sa_3`
 

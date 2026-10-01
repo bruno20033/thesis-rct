@@ -159,7 +159,8 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
         axis_annotations: list[str] | None = None,
         tick_labels: list[list[str]] | None = None,
         selection_brush: tuple[int, float, float] | None = None,
-        endpoint_labels: list[bool] | None = None) -> None:
+        endpoint_labels: list[bool] | None = None,
+        show_legend: bool = True) -> None:
     """Draw a publication-quality PCP with independent axis scales.
 
     Every value is transformed only for display.  The original data frame stays
@@ -239,8 +240,9 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
         colors = [color_lookup.get(category, "#1f77b4") for category in categories]
         shown_colors = legend_colors or color_lookup
         handles = [Line2D([0], [0], color=shown_colors[key], lw=4, label=str(key)) for key in keys]
-        ax.legend(handles=handles, title=legend_title or color_by, frameon=False,
-                  loc="center left", bbox_to_anchor=(1.02, .5), fontsize=8, title_fontsize=9)
+        if show_legend:
+            ax.legend(handles=handles, title=legend_title or color_by, frameon=False,
+                      loc="center left", bbox_to_anchor=(1.02, .5), fontsize=8, title_fontsize=9)
     elif palette:
         series = (pd.to_numeric(frame.loc[d.index, palette_by], errors="coerce").to_numpy()
                   if palette_by else values[:, -1])
@@ -287,8 +289,10 @@ def single(stem, frame, cols, labels=None, **kwargs):
     save(fig, stem, GENERATED)
 
 
-def panel(stem, frame, variants, figsize=(13, 4.8)):
-    fig, axes = plt.subplots(1, len(variants), figsize=figsize, constrained_layout=True)
+def panel(stem, frame, variants, figsize=(13, 4.8), ncols=None):
+    columns = ncols or len(variants)
+    rows = (len(variants) + columns - 1) // columns
+    fig, axes = plt.subplots(rows, columns, figsize=figsize, constrained_layout=True)
     for ax, variant in zip(np.ravel(axes), variants):
         chart = {key: value for key, value in variant.items() if key != "title"}
         pcp(ax, frame, **chart)
@@ -317,7 +321,20 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     iris_cols = [resolve(iris, "sepal_length"), resolve(iris, "sepal_width"),
                  resolve(iris, "petal_length"), resolve(iris, "petal_width")]
     iris_labels = ["Sepal length", "Sepal width", "Petal length", "Petal width"]
-    single("pcp_rem_fa_1", iris, iris_cols, iris_labels, palette="viridis", alpha=.26, linewidth=.7)
+    # Remember FA1 is the seven-axis Auto MPG chart in the released test,
+    # ending with a categorical origin axis. An earlier candidate incorrectly
+    # substituted an iris chart, which changed the stimulus entirely.
+    auto_mpg = frames["auto"].copy()
+    auto_mpg["_origin_rank"] = auto_mpg["origin"].map({"usa": 0, "japan": 1, "europe": 2})
+    single("pcp_rem_fa_1", auto_mpg,
+           ["mpg", "cylinders", "displacement", "horsepower", "weight", "acceleration", "_origin_rank"],
+           ["mpg", "cylinders", "displacement", "horsepower", "weight", "acceleration", "origin"],
+           limits=[(5, 50), (2.5, 8.5), (29, 494), (28, 248), (1260, 5493), (6, 26), (0, 2)],
+           tick_values=[[], [], [], [], [], [], [0, 1, 2]],
+           tick_labels=[[], [], [], [], [], [], ["American", "Japanese", "European"]],
+           endpoint_labels=[True, True, True, True, True, True, False],
+           color_by="origin", category_colors={"usa": "#377eb8", "japan": "#e49445", "europe": "#50a869"},
+           show_legend=False, alpha=.16, linewidth=.5)
     single("pcp_rem_sa_2", iris, iris_cols, iris_labels, palette="plasma", alpha=.24, linewidth=.7)
     single("pcp_rem_fa_2", iris,
            [resolve(iris, "sepal_width"), resolve(iris, "sepal_length"), resolve(iris, "petal_width"), resolve(iris, "petal_length")],
@@ -365,12 +382,19 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
                  resolve(auto, "horsepower"), resolve(auto, "weight"), resolve(auto, "acceleration"),
                  resolve(auto, "model_year")]
     auto_labels = ["MPG", "Cylinders", "Displacement", "Horsepower", "Weight", "Acceleration", "Year"]
+    # The original choice grid is A/C on the first row and B/D on the second.
+    # B alone puts displacement next to weight; keep all four original axis
+    # subsets so the distractors test the same adjacency decision.
     panel("pcp_ana_sa_1", auto, [
-        dict(columns=auto_cols, labels=auto_labels, title="A"),
-        dict(columns=auto_cols[2:5] + auto_cols[:2] + auto_cols[5:], labels=auto_labels[2:5] + auto_labels[:2] + auto_labels[5:], title="B"),
-        dict(columns=auto_cols[::-1], labels=auto_labels[::-1], title="C"),
-        dict(columns=[auto_cols[0], auto_cols[2], auto_cols[4], auto_cols[3], auto_cols[1]], labels=[auto_labels[0], auto_labels[2], auto_labels[4], auto_labels[3], auto_labels[1]], title="D"),
-    ], figsize=(15, 4.3))
+        dict(columns=["cylinders", "acceleration", "mpg", "model_year"],
+             labels=["Cylinders", "Acceleration", "Miles per Gallon", "Year"], title="A"),
+        dict(columns=["cylinders", "weight", "horsepower", "acceleration", "mpg"],
+             labels=["Cylinders", "Weight in lbs", "Horsepower", "Acceleration", "Miles per Gallon"], title="C"),
+        dict(columns=["cylinders", "displacement", "weight", "model_year"],
+             labels=["Cylinders", "Displacement", "Weight in lbs", "Year"], title="B"),
+        dict(columns=["cylinders", "horsepower", "acceleration", "mpg"],
+             labels=["Cylinders", "Horsepower", "Acceleration", "Miles per Gallon"], title="D"),
+    ], figsize=(15, 8.6), ncols=2)
     # This item is the 32-row mtcars table (not the similarly named Auto MPG
     # source). The original brush includes the 400-displacement Pontiac, so
     # the selected HP range is exactly 175–230 as the source assessment key.
@@ -390,9 +414,17 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     cereal_cols = [resolve(cereal, "protein"), resolve(cereal, "fat"),
                    resolve(cereal, "fiber"), resolve(cereal, "carbo"), resolve(cereal, "sugars")]
     cereal_labels = ["protein (g)", "fat (g)", "fiber (g)", "carbohydrate (g)", "sugars (g)"]
-    panel("pcp_und_fa_1", cereal, [
-        dict(columns=cereal_cols, labels=cereal_labels, title="(a)"),
-        dict(columns=cereal_cols, labels=cereal_labels, flip={3}, title="(b)"),
+    # Understand FA1 and Analyze SA7 use the Dex nutrients source. The test
+    # names fiber, fat, carbohydrate and monounsaturated fat; the old renderer
+    # mistakenly used cereal protein and sugar instead.
+    nutrients_for_fat = frames["nutrients"]
+    fat_cols = ["fiber (g)", "fat (g)", "carbohydrate (g)", "monounsat (g)"]
+    fat_limits = [(0, 80), (0, 100), (0, 100), (0, 80)]
+    panel("pcp_und_fa_1", nutrients_for_fat, [
+        dict(columns=fat_cols, labels=fat_cols, limits=fat_limits, title="(a)",
+             palette="plasma", alpha=.09, linewidth=.35, labels_top=True),
+        dict(columns=fat_cols, labels=fat_cols, limits=fat_limits, flip={2}, title="(b)",
+             palette="plasma", alpha=.09, linewidth=.35, labels_top=True),
     ], figsize=(12, 4.7))
     cereal_all_cols = ["id", resolve(cereal, "calories"), resolve(cereal, "protein"), resolve(cereal, "fat"),
                        resolve(cereal, "sodium"), resolve(cereal, "fiber"), resolve(cereal, "carbo"),
@@ -403,7 +435,9 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
            ["id", "calories", "protein", "fat", "sodium", "fiber", "carbo", "sugars", "potass",
             "vitamins", "shelf", "weight", "cups", "rating"],
            palette="viridis", alpha=.20, linewidth=.65)
-    single("pcp_ana_sa_7", cereal, cereal_cols, cereal_labels, palette="plasma", alpha=.18, linewidth=.7)
+    single("pcp_ana_sa_7", nutrients_for_fat, fat_cols[:3], fat_cols[:3],
+           limits=fat_limits[:3], palette="plasma", alpha=.09, linewidth=.35,
+           labels_top=True)
 
     nutrients = frames["nutrients"]
     nutrient_cols = ["calcium (g)", "water (g)", "fiber (g)", "monounsat (g)"]
@@ -457,7 +491,13 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     ccols = [resolve(college, "SATAverage"), resolve(college, "AdmissionRate"),
              resolve(college, "AverageCost"), resolve(college, "MedianDebt")]
     clabels = ["SATAverage", "AdmissionRate", "AverageCost", "MedianDebt"]
-    single("pcp_ana_sa_5", college, ccols, clabels, palette="viridis", alpha=.08, linewidth=.45)
+    # Analyze SA5 displays AdmissionRate, SATAverage and faculty salary in
+    # that order. The first candidate wrongly added AverageCost and MedianDebt.
+    single("pcp_ana_sa_5", college,
+           [ccols[1], ccols[0], resolve(college, "AverageFacultySalary")],
+           ["AdmissionRate", "SATAverage", "AverageFacultySalary"],
+           limits=[(.1, 1), (800, 1500), (5000, 17000)],
+           labels_top=True, alpha=.08, linewidth=.45)
     # The four mini-plots use the Alabama cohort in the original stimulus and
     # compare one dark-blue university against the same faint background.
     # Keeping common axes makes the requested AverageCost ranking meaningful.
@@ -499,7 +539,7 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     grid = fig.add_gridspec(2, 4, height_ratios=[1.6, 1])
     top = fig.add_subplot(grid[0, :])
     pcp(top, pstd, pcols, ["bill_length_mm", "bill_depth_mm", "flipper_length_mm"],
-        color_by=resolve(penguins, "species"), category_colors={"Adelie": "#e97875", "Chinstrap": "#51b45d", "Gentoo": "#4f7fe7"},
+        color_by=resolve(penguins, "species"), category_colors={"Adelie": "#5b356e", "Chinstrap": "#4caaae", "Gentoo": "#edcc40"},
         legend_title="species", alpha=.30, linewidth=.6)
     mass = resolve(penguins, "body_mass_g")
     species = resolve(penguins, "species")
@@ -507,16 +547,32 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     species_colours = {"Adelie": "#e97875", "Chinstrap": "#51b45d", "Gentoo": "#4f7fe7"}
     for ax, (xcol, ycol, title) in zip([fig.add_subplot(grid[1, i]) for i in range(4)], scatter_specs):
         for name, group in penguins.dropna(subset=[xcol, ycol, species]).groupby(species):
-            ax.scatter(group[xcol], group[ycol], s=22, color=species_colours[str(name)], alpha=.72, edgecolors="none")
+            size_col = pcols[2] if title in ("A", "B", "C") else mass
+            sizes = pd.to_numeric(group[size_col], errors="coerce")
+            source_sizes = pd.to_numeric(penguins[size_col], errors="coerce")
+            sizes = 12 + 90 * (sizes - source_sizes.min()) / max(source_sizes.max() - source_sizes.min(), 1)
+            ax.scatter(group[xcol], group[ycol], s=sizes, color=species_colours[str(name)], alpha=.72, edgecolors="none")
         ax.set_xlabel(xcol); ax.set_ylabel(ycol); ax.set_title(title, loc="left", fontweight="bold"); ax.grid(alpha=.18)
     save(fig, "pcp_ana_fa_2", GENERATED)
 
     runners = frames["runners"]
-    rcols = ["miles", "training_time_min", "shoe_brand", "pace_min", "short_or_long", "after_2004"]
+    # Highcharts' original has seven axes, including Training date. The first
+    # redraw omitted that axis and lost the categorical/time tick labels.
+    date = pd.to_datetime(runners["training_date_ms"], unit="ms", utc=True)
+    runners["training_year"] = date.dt.year + (date.dt.dayofyear - 1) / 365.25
+    rcols = ["training_year", "miles", "training_time_min", "shoe_brand", "pace_min", "short_or_long", "after_2004"]
     single("pcp_und_sa_7", runners, rcols,
-           ["Miles for training run", "Training time (min)", "Shoe brand",
-            "Running pace per mile (min)", "Short or long", "After 2004"],
-           palette="viridis", alpha=.15, linewidth=.55)
+           ["Training date", "Miles for training run", "Training time", "Shoe brand",
+            "Running pace per mile", "Short or long", "After 2004"],
+           limits=[(2001, 2008), (0, 30), (0, 300), (0, 6), (6, 11), (0, 1), (0, 1)],
+           tick_values=[list(range(2001, 2009)), [0, 6, 12, 18, 24, 30], [0, 60, 120, 180, 240, 300],
+                        list(range(7)), [6, 7, 8, 9, 10, 11], [0, 1], [0, 1]],
+           tick_labels=[[str(year) for year in range(2001, 2009)], [str(x) for x in [0, 6, 12, 18, 24, 30]],
+                        [f"0{x}:00" for x in range(6)],
+                        ["Other", "Adidas", "Mizuno", "Asics", "Brooks", "New Balance", "Izumi"],
+                        [f"00:{x:02d}" for x in range(6, 12)], ["> 5 miles", "< 5 miles"], ["Before", "After"]],
+           endpoint_labels=[False] * 7, labels_top=True,
+           alpha=.12, linewidth=.55)
 
     # The visible chart excludes the eight records beyond its two displayed
     # upper bounds (Interval > 826 or Deaths > 344). The remaining source
@@ -579,7 +635,7 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
         ana_variant(["degree", "value", "own", "income"], "B"),
         ana_variant(["own", "value", "income", "homes"], "C"),
         ana_variant(["degree", "own", "homes", "value"], "D"),
-    ], figsize=(15, 10.5))
+    ], figsize=(15, 12), ncols=1)
 
     # Evaluate items deliberately contain design faults.  Preserve the faults:
     # tiny labels (SA3) and cluttered/unreadable labels (SA2), while keeping
@@ -620,12 +676,13 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
            category_colors={"Gentoo": "#fff8c7", "Chinstrap": "#5aaec1", "Adelie": "#13245b"},
            legend_title="species", limits=[(40, 60), (10, 22), (170, 230)], alpha=.38, linewidth=.55)
 
-    mtcars = frames["mtcars"]
-    single("pcp_eval_sa_7", mtcars,
-           ["mpg", "qsec", "hp", "hp", "qsec"],
+    # The original includes 3- and 5-cylinder cars, so it is the Auto MPG
+    # table rather than mtcars (which has only 4, 6 and 8 cylinders).
+    single("pcp_eval_sa_7", auto,
+           ["mpg", "acceleration", "horsepower", "horsepower", "acceleration"],
            ["economy (mpg)", "0-60 mph (s)", "power (hp)", "power(hp)", "0-60 mph(s)"], labels_top=True,
-           color_by="cyl", category_colors={"3": "#d62728", "4": "#3d68a5", "5": "#5a9e42", "6": "#6b3a8d", "8": "#ef8336"},
-           legend_title="Cylinders", limits=[(0, 230)] * 5, alpha=.58, linewidth=.75)
+           color_by="cylinders", category_colors={"3": "#d62728", "4": "#3d68a5", "5": "#5a9e42", "6": "#6b3a8d", "8": "#ef8336"},
+           legend_title="Cylinders", limits=[(0, 230)] * 5, flip={3}, alpha=.58, linewidth=.75)
 
     abalone = frames["abalone"]
     single("pcp_eval_sa_4", abalone, ["length", "diameter", "whole.wt"],
