@@ -174,7 +174,21 @@
     font-size: 14px; line-height: 1.4;
   }
   .rct-reflection-text:focus { outline: 2px solid #90caf9; border-color: #1976d2; }
-  .rct-reflection-continue { flex: 0 0 auto; margin-top: 12px; }
+  .rct-root.is-reflecting .rct-right { filter: blur(8px); user-select: none; pointer-events: none; }
+  .rct-reflection-overlay {
+    position: fixed; inset: 0; z-index: 1000; padding: 16px;
+    display: flex; align-items: center; justify-content: center;
+    box-sizing: border-box; background: rgba(18, 32, 46, .62);
+  }
+  .rct-reflection-dialog {
+    width: min(100%, 520px); max-height: calc(100vh - 32px); overflow-y: auto;
+    box-sizing: border-box; padding: 24px; border-radius: 8px; background: #fff;
+    box-shadow: 0 18px 52px rgba(0, 0, 0, .28);
+  }
+  .rct-reflection-dialog .rct-reflection-text { min-height: 112px; }
+  .rct-reflection-tool { display: flex; gap: 10px; align-items: flex-start; margin: 16px 0; line-height: 1.45; }
+  .rct-reflection-tool input { margin-top: 3px; accent-color: #1976d2; }
+  .rct-reflection-dialog .rct-button { width: 100%; }
 
   .rct-button {
     appearance: none; -webkit-appearance: none; border: none; cursor: pointer;
@@ -645,8 +659,10 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       tf_false: 'False',
       btn_finish: 'Finish',
       btn_next: 'Next question →',
+      btn_confirm: 'Confirm answer',
       hint_finish: 'You can change your selection until you click Finish.',
       hint_next: 'You can change your selection until you click Next question.',
+      hint_confirm: 'Confirm your choice, then explain your reasoning.',
       submitted: 'Submitted',
       all_recorded: 'All answers recorded. Click Next to continue.',
       answer_submitted: 'Answer submitted',
@@ -655,12 +671,12 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       chart_unavailable: 'Chart image unavailable',
       chart_loading: 'Loading chart…',
       placeholder_item: 'Placeholder item — scoring excluded',
-      reflection_title: 'Before answering',
-      reflection_prompt: 'Which statement best describes your own reasoning at this point?',
-      reflection_own: 'I can state my own reasoning.',
+      reflection_title: 'Explain your answer',
+      reflection_prompt: 'Briefly explain how you arrived at the answer you just chose.',
       reflection_tool: 'I relied mainly on the tool and cannot state my own reasoning.',
       reflection_text_prompt: 'Briefly explain your reasoning (one or two sentences).',
-      reflection_continue: 'Continue to question'
+      reflection_continue: 'Submit answer and continue',
+      reflection_finish: 'Submit answer and finish'
     },
     DE: {
       instr_title: 'Anweisungen',
@@ -707,8 +723,10 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       tf_false: 'Falsch',
       btn_finish: 'Fertig',
       btn_next: 'Nächste Frage →',
+      btn_confirm: 'Antwort bestätigen',
       hint_finish: 'Sie können Ihre Auswahl ändern, bis Sie auf „Fertig" klicken.',
       hint_next: 'Sie können Ihre Auswahl ändern, bis Sie auf „Nächste Frage" klicken.',
+      hint_confirm: 'Bestätigen Sie Ihre Auswahl und begründen Sie sie anschließend.',
       submitted: 'Übermittelt',
       all_recorded: 'Alle Antworten wurden gespeichert. Klicken Sie auf „Weiter", um fortzufahren.',
       answer_submitted: 'Antwort übermittelt',
@@ -717,12 +735,12 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       chart_unavailable: 'Diagrammbild nicht verfügbar',
       chart_loading: 'Diagramm wird geladen…',
       placeholder_item: 'Platzhalter-Item — von der Bewertung ausgeschlossen',
-      reflection_title: 'Vor der Antwort',
-      reflection_prompt: 'Welche Aussage beschreibt Ihr eigenes Nachdenken zu diesem Zeitpunkt am besten?',
-      reflection_own: 'Ich kann meine eigene Begründung nennen.',
+      reflection_title: 'Begründen Sie Ihre Antwort',
+      reflection_prompt: 'Erklären Sie kurz, wie Sie zu Ihrer gerade gewählten Antwort gekommen sind.',
       reflection_tool: 'Ich habe mich hauptsächlich auf das Werkzeug gestützt und kann keine eigene Begründung nennen.',
       reflection_text_prompt: 'Erläutern Sie Ihre Begründung kurz (ein oder zwei Sätze).',
-      reflection_continue: 'Weiter zur Frage'
+      reflection_continue: 'Antwort abgeben und fortfahren',
+      reflection_finish: 'Antwort abgeben und abschließen'
     }
   };
   function t(key) {
@@ -806,7 +824,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
 
   // ── Load VLAT practice-block items (the aided training set) ──────────
   // Pulls the eight released practice items plus eight source-authored
-  // training-only items. The four reflection items are always positions 13–16.
+  // training-only items. The five post-answer reflection items are positions 12–16.
   // normalised to the engine's question shape. There is NO client-side
   // answer key by design (participants could view-source it); correctness
   // is scored offline by vlat_scoring.js. Each item carries its chart id so
@@ -843,7 +861,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
 
   // ── Build QUESTIONS array ──
   // VLAT aided-training mode: 8 released practice items plus 8 source-authored
-  // training-only items. The last 4 start with the reflection declaration.
+  // training-only items. The last 5 request a reason after answer selection.
   // CR loading is
   // retained above but never invoked here (IS_CR_MODE is hard-disabled).
   var QUESTIONS = loadVLATItems();
@@ -1468,14 +1486,6 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     // Render CR stem in its dedicated area (above the question block)
     if (IS_CR_MODE) renderCRStem(q);
 
-    // The four final training items deliberately separate tool use from
-    // metacognitive reporting: participants first declare whether they can
-    // give their own reasoning, then answer the source-authored chart item.
-    if (q.reflection && !(log.reflections[q.id] && log.reflections[q.id].complete)) {
-      renderReflection(q, idx);
-      return;
-    }
-
     var html = '';
     html += '<p class="rct-question-progress">' + esc(tf('q_progress', { n: idx + 1, m: QUESTIONS.length })) + '</p>';
     html += '<div class="rct-question" data-qid="' + esc(q.id) + '">';
@@ -1521,9 +1531,9 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
       html += '</div>';
     }
     html += '</div>';
-    var btnLabel = isLastQuestion() ? t('btn_finish') : t('btn_next');
+    var btnLabel = q.reflection ? t('btn_confirm') : (isLastQuestion() ? t('btn_finish') : t('btn_next'));
     html += '<button type="button" id="rct-submit-final" class="rct-button rct-button-primary" disabled>' + esc(btnLabel) + '</button>';
-    var hintText = isLastQuestion() ? t('hint_finish') : t('hint_next');
+    var hintText = q.reflection ? t('hint_confirm') : (isLastQuestion() ? t('hint_finish') : t('hint_next'));
     html += '<p class="rct-submit-hint">' + esc(hintText) + '</p>';
     holder.innerHTML = html;
 
@@ -1544,57 +1554,57 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     refreshSubmitState();
   }
 
-  function renderReflection(q, idx) {
-    var holder = $('#question-area');
-    var saved = log.reflections[q.id] || { mode: null, reasoning_text: null };
-    var ownChecked = saved.mode === 'own_reasoning' ? ' checked' : '';
-    var toolChecked = saved.mode === 'tool_reliance' ? ' checked' : '';
-    var textHidden = saved.mode === 'own_reasoning' ? '' : ' style="display:none"';
-    var text = saved.reasoning_text || '';
-    holder.innerHTML =
-      '<p class="rct-question-progress">' + esc(tf('q_progress', { n: idx + 1, m: QUESTIONS.length })) + '</p>' +
-      '<div class="rct-question" data-qid="' + esc(q.id) + '">' +
-        '<h2 class="rct-reflection-title">' + esc(t('reflection_title')) + '</h2>' +
+  function showReflectionModal(q) {
+    if (document.querySelector('.rct-reflection-overlay')) return;
+    var overlay = document.createElement('div');
+    overlay.className = 'rct-reflection-overlay';
+    overlay.innerHTML =
+      '<div class="rct-reflection-dialog" role="dialog" aria-modal="true" aria-labelledby="rct-reflection-title">' +
+        '<h2 id="rct-reflection-title" class="rct-reflection-title">' + esc(t('reflection_title')) + '</h2>' +
         '<p class="rct-reflection-prompt">' + esc(t('reflection_prompt')) + '</p>' +
-        '<div class="rct-question-options">' +
-          '<label class="rct-option"><input type="radio" name="rct-reflection-' + esc(q.id) + '" value="own_reasoning"' + ownChecked + '/><span>' + esc(t('reflection_own')) + '</span></label>' +
-          '<label class="rct-option"><input type="radio" name="rct-reflection-' + esc(q.id) + '" value="tool_reliance"' + toolChecked + '/><span>' + esc(t('reflection_tool')) + '</span></label>' +
-        '</div>' +
-        '<div id="rct-reflection-text-wrap"' + textHidden + '>' +
-          '<p class="rct-reflection-prompt" style="margin-top:14px">' + esc(t('reflection_text_prompt')) + '</p>' +
-          '<textarea id="rct-reflection-text" class="rct-reflection-text" maxlength="600"></textarea>' +
-        '</div>' +
-      '</div>' +
-      '<button type="button" id="rct-reflection-continue" class="rct-button rct-button-primary rct-reflection-continue" disabled>' + esc(t('reflection_continue')) + '</button>';
-    var textEl = $('#rct-reflection-text');
-    if (textEl) textEl.value = text;
-    function state() {
-      var mode = $('input[name="rct-reflection-' + q.id + '"]:checked');
-      var valid = !!mode && (mode.value === 'tool_reliance' || (textEl && textEl.value.trim().length > 0));
-      var button = $('#rct-reflection-continue'); if (button) button.disabled = !valid;
+        '<label for="rct-reflection-text" class="rct-reflection-prompt">' + esc(t('reflection_text_prompt')) + '</label>' +
+        '<textarea id="rct-reflection-text" class="rct-reflection-text" maxlength="600"></textarea>' +
+        '<label class="rct-reflection-tool"><input type="checkbox" id="rct-reflection-tool"/>' +
+          '<span>' + esc(t('reflection_tool')) + '</span></label>' +
+        '<button type="button" id="rct-reflection-continue" class="rct-button rct-button-primary" disabled>' +
+          esc(isLastQuestion() ? t('reflection_finish') : t('reflection_continue')) + '</button>' +
+      '</div>';
+    document.body.appendChild(overlay);
+    root.classList.add('is-reflecting');
+    root.setAttribute('aria-hidden', 'true');
+    var textEl = overlay.querySelector('#rct-reflection-text');
+    var toolEl = overlay.querySelector('#rct-reflection-tool');
+    var button = overlay.querySelector('#rct-reflection-continue');
+    function updateState() {
+      textEl.disabled = toolEl.checked;
+      if (toolEl.checked) textEl.value = '';
+      button.disabled = !toolEl.checked && !textEl.value.trim();
     }
-    $$('input[name="rct-reflection-' + q.id + '"]').forEach(function (input) {
-      input.addEventListener('change', function () {
-        $$('.rct-option').forEach(function (lbl) { lbl.classList.remove('is-selected'); });
-        var parent = input.closest('.rct-option'); if (parent) parent.classList.add('is-selected');
-        var wrap = $('#rct-reflection-text-wrap'); if (wrap) wrap.style.display = input.value === 'own_reasoning' ? '' : 'none';
-        state();
-      });
+    textEl.addEventListener('input', updateState);
+    toolEl.addEventListener('change', updateState);
+    overlay.addEventListener('keydown', function (event) {
+      if (event.key !== 'Tab') return;
+      var focusable = [textEl, toolEl, button].filter(function (el) { return !el.disabled; });
+      var first = focusable[0], last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault(); last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault(); first.focus();
+      }
     });
-    if (textEl) { textEl.addEventListener('input', state); }
-    var current = $('input[name="rct-reflection-' + q.id + '"]:checked');
-    if (current) { var currentParent = current.closest('.rct-option'); if (currentParent) currentParent.classList.add('is-selected'); }
-    $('#rct-reflection-continue').addEventListener('click', function () {
-      var selected = $('input[name="rct-reflection-' + q.id + '"]:checked');
-      if (!selected) return;
-      var reasoning = selected.value === 'own_reasoning' && textEl ? textEl.value.trim() : null;
-      if (selected.value === 'own_reasoning' && !reasoning) return;
-      log.reflections[q.id] = { complete: true, mode: selected.value, reasoning_text: reasoning };
-      logEvent({ type: 'reflection_submitted', question_id: q.id, mode: selected.value, reasoning_text: reasoning });
+    button.addEventListener('click', function () {
+      var reasoning = toolEl.checked ? null : textEl.value.trim();
+      if (!toolEl.checked && !reasoning) return;
+      var mode = toolEl.checked ? 'tool_reliance' : 'own_reasoning';
+      log.reflections[q.id] = { complete: true, mode: mode, reasoning_text: reasoning };
+      logEvent({ type: 'reflection_submitted', question_id: q.id, mode: mode, reasoning_text: reasoning });
       persist();
-      renderQuestions();
+      overlay.remove();
+      root.classList.remove('is-reflecting');
+      root.removeAttribute('aria-hidden');
+      finalizeCurrentAnswer();
     });
-    state();
+    textEl.focus();
   }
 
   function currentAnswered() {
@@ -1603,7 +1613,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     // An older saved abstention is no longer a selectable training answer.
     // Preserve the historical log, but require a current substantive choice.
     if (q.type === 'vlat' && !q.options.some(function (opt) { return opt.key === log.answers[q.id]; })) return false;
-    return !q.reflection || !!(log.reflections[q.id] && log.reflections[q.id].complete);
+    return true;
   }
 
   function allAnswered() {
@@ -1639,6 +1649,16 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   }
 
   function onSubmitCurrent() {
+    if (!currentAnswered() || isFinalised()) return;
+    var q = currentQuestion();
+    if (q.reflection) {
+      showReflectionModal(q);
+      return;
+    }
+    finalizeCurrentAnswer();
+  }
+
+  function finalizeCurrentAnswer() {
     if (!currentAnswered() || isFinalised()) return;
     // If the participant is currently viewing a result in the right
     // panel, close the viewer first so the dwell event is logged with
