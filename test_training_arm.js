@@ -10,8 +10,8 @@ const post = new Set(released.filter(x => x.block !== 'practice').map(x => x.id)
 assert.equal(practice.length, 16);
 assert.equal(new Set(practice.map(x => x.id)).size, 16);
 assert.equal(extension.length, 8);
-assert.equal(extension.filter(x => x.reflection).length, 5);
-assert.ok(extension.find(x => x.id === 'pcp_create_4').reflection);
+assert.equal(extension.filter(x => x.reflection).length, 4);
+assert.ok(extension.find(x => x.id === 'pcp_create_5').reflection);
 assert.ok(practice.every(x => x.block === 'practice' && !post.has(x.id)));
 for (const item of practice) {
   assert.ok(fs.existsSync(path.join(__dirname, 'charts', `${item.chartId}.png`)), item.id);
@@ -33,4 +33,4 @@ for (const item of extension) {
 }
 const counts = Object.fromEntries('ABCD'.split('').map(letter => [letter, extension.filter(x => PCP_KEY[x.id] === letter).length]));
 assert.deepEqual(counts, {A: 2, B: 2, C: 2, D: 2});
-console.log('Training arm: 16 unique items, 5 post-answer reflection prompts, all assets/keys and balanced extensions verified');
+console.log('Training arm: 16 unique items, 4 post-answer reflection prompts, all assets/keys and balanced extensions verified');

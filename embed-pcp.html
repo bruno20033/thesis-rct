@@ -1445,13 +1445,17 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   // labelled placeholder rather than a broken-image icon.
   var chartReady = !IS_VLAT_MODE;
   var chartPreloads = {};
+  function chartAssetUrl(id) {
+    return 'charts/' + id + '.png' +
+      (/^pcp_/.test(id) ? '?v=pcp-reviewed-20261001' : '');
+  }
   function preloadPracticeChart(index) {
     if (index >= QUESTIONS.length) return;
     var id = QUESTIONS[index].chartId;
     if (!id || chartPreloads[id]) return;
     var img = new Image();
     img.decoding = 'async';
-    img.src = 'charts/' + id + '.png';
+    img.src = chartAssetUrl(id);
     chartPreloads[id] = img;
   }
   function renderVLATChart() {
@@ -1464,10 +1468,8 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     var title = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var paneHeader = root.querySelector('.rct-left .rct-pane-header');
     if (paneHeader) paneHeader.textContent = title;
-    // The revised recognition image has its answer-revealing title removed.
-    // Version its URL so returning participants do not see a cached copy.
-    var src = 'charts/' + q.chartId + '.png' +
-      (q.chartId === 'pcp_rem_fa_2' ? '?v=title-removed-1' : '');
+    // Version PCP URLs so returning participants receive the reviewed assets.
+    var src = chartAssetUrl(q.chartId);
     holder.innerHTML =
       '<figure style="margin:0">' +
         '<div class="vlat-chart-loading" role="status" aria-live="polite">' +

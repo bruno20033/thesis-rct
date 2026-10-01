@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -32,10 +33,12 @@ required_labels = {
 }
 for stem, labels in required_labels.items():
     svg = (HERE / "out" / "svg" / f"{stem}.svg").read_text()
-    if any(f"<!-- {label} -->" not in svg for label in labels):
+    comments = {" ".join(comment.split()) for comment in re.findall(r"<!--(.*?)-->", svg, re.S)}
+    all_comments = " ".join(comments)
+    if any(not all(word in all_comments for word in label.split()) for label in labels):
         raise SystemExit(f"{stem}: missing expected axis/category label")
     for forbidden in ("Sepal length", "protein (g)", "sugars (g)"):
-        if f"<!-- {forbidden} -->" in svg:
+        if forbidden in comments:
             raise SystemExit(f"{stem}: unexpected {forbidden} label")
 
 source_pinned = set(LEDGER["source_pinned_candidates"])

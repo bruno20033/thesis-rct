@@ -45,7 +45,12 @@ before(async () => {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
-  browser = await chromium.launch({ headless: true });
+  try {
+    browser = await chromium.launch({ headless: true });
+  } catch (error) {
+    if (!String(error).includes("Executable doesn't exist")) throw error;
+    browser = await chromium.launch({ headless: true, channel: 'chrome' });
+  }
 });
 after(async () => {
   if (browser) await browser.close();

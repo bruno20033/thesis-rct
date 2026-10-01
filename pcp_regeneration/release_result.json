@@ -1,0 +1,271 @@
+{
+  "replaced": [
+    {
+      "chart_id": "pcp_rem_fa_1",
+      "before_sha256": "b500ace6df3b6faaff0905e54d42fad4e09cbd7e440448cb2d05d75f82bc4870",
+      "after_sha256": "7f1e3b04c477c2b56ee14856e2cda7ec67ed815ae2f8fe13f5a3b4dabb132de7",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_und_fa_1",
+      "before_sha256": "095f3e35904ebd9762d950a4e5ce6a1890dfa055c5fb796a3ebc52b981857676",
+      "after_sha256": "aca80bca632dc68b4e5cb21d45d28b57e245a326ee4a8acff934a21f805d9e60",
+      "dimensions": [
+        3634,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_fa_1",
+      "before_sha256": "a437d42afe069336888ac5b21db2987e22cb99a227648ecd566521cc0a0b0de9",
+      "after_sha256": "c715863ec20228002ee6702555e8f9f341c911959b50b47da84751634b2acc59",
+      "dimensions": [
+        4534,
+        3634
+      ]
+    },
+    {
+      "chart_id": "pcp_eval_fa_10",
+      "before_sha256": "6ee4b01ba1b7f40b60e6f4f742ad02510e8288c55273d1b406c994651f5cae46",
+      "after_sha256": "10f2057cc677d60c9f138beefc6187c0e304962e3defce3d800bee003daecd6b",
+      "dimensions": [
+        3181,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_fa_2",
+      "before_sha256": "97b30829ab7d85604f82f7e46f224ae9d2534a4788ca2bcfc159db75aab56a48",
+      "after_sha256": "739f57f6881cc8140730a1090c46b1d0313f00b191a7c4c53545326f65734241",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_und_fa_2",
+      "before_sha256": "b0b651e8ba468a146cefd8748a78d1fd48690577c5d64fe91ec306b5db2829cf",
+      "after_sha256": "8bd2b27456ac6d0b5300fcd28c8d987142980248da7549e0d4d8af70fbbae3d3",
+      "dimensions": [
+        3934,
+        1564
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_fa_2",
+      "before_sha256": "3360f374c1d3938cebcf4dc9504cd0de69837489564290b6b6cb149c6ec4901a",
+      "after_sha256": "6c8d27621d0704699b02424d81be7fe843c3751923ff14ce5f6f2b5118e02fd7",
+      "dimensions": [
+        4234,
+        2434
+      ]
+    },
+    {
+      "chart_id": "pcp_eval_fa_11",
+      "before_sha256": "a2129944bf5ed7cec8c212e382015df7a39d0f172c3ca45396299bc0ff419edb",
+      "after_sha256": "bd9945b95dd16898b4f46e9580765c5a259cfa1d9498a07226a351c37b709bbc",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_sa_3",
+      "before_sha256": "a5d3be6171fe1410454a4eb1eb9b258df51a37f731378b253cb394f3f32d37f9",
+      "after_sha256": "6b5166ae8e639f106355cda619702ea709aece907164805aa524f256d7c52f7f",
+      "dimensions": [
+        3634,
+        4084
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_sa_4",
+      "before_sha256": "10332f2c20ca033516f94cb88ba55c3a4dfa82e7582e9c3f5f8a3094655621f1",
+      "after_sha256": "98a6aac1afa8d64034e3375960ab2a8d8dbbc07852fec0c3be0ab1bdb271e792",
+      "dimensions": [
+        3034,
+        2434
+      ]
+    },
+    {
+      "chart_id": "pcp_und_sa_1",
+      "before_sha256": "b3d9f310868e1d82147be4d5962f6e63b1808ce07a73b17ca54b463b3f642658",
+      "after_sha256": "09dc5210e3a197c87807a1c8d393ad3c63f140e84032df67070a9ce26072e5e9",
+      "dimensions": [
+        3334,
+        3034
+      ]
+    },
+    {
+      "chart_id": "pcp_und_sa_3",
+      "before_sha256": "27d36be97263656ea3be1eff5a9bb3777112a2b52273248ff051edef528524d3",
+      "after_sha256": "6fb2792c80800b880aae251b8974a35ab19a6a45ef6fe2c42077367a7406c0d1",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_und_sa_4",
+      "before_sha256": "0f4e7593b40df49d71d88a07e1295ce96682530aa3c2e42d7a064b2d72a1a653",
+      "after_sha256": "a119dcdb66f49762eab36a4b2661ea8b5c91f5cf870221589d8c066b2f464c05",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_1",
+      "before_sha256": "c7bb2ad1768adb35ce20f95e4206b99ef0fe1dfdeb8ff58eb84e83ee0a64de31",
+      "after_sha256": "e560dbf4b03409016cc07a0eb8a55fdc2afdf462fc03d429250154ee8ab0efa8",
+      "dimensions": [
+        4534,
+        2614
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_2",
+      "before_sha256": "ce900961aa991e5df19b579c004c5033255cac51972c15b89ab4e628e670312b",
+      "after_sha256": "c5b5c33b0e3ec27fb8d960f18c5f597cfa3517083635ad293d99b4c5c631fda3",
+      "dimensions": [
+        4534,
+        2674
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_9",
+      "before_sha256": "7a10cbf329e0bbd95abb40ee39552d96aa810c0769cd3d662922006417b05c69",
+      "after_sha256": "5e0ed95f1ac7f0c251d238408df5a753434e8c84ce36053174d15464145ca709",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_sa_5",
+      "before_sha256": "37b39f4cfa99ddda8d7d63c269bf991ef6a876632b7e93ca42890b8971b4d5d6",
+      "after_sha256": "dc40d83b059091581a050c966b029c73cd04371d7de1ca87269a9ab56e798480",
+      "dimensions": [
+        2584,
+        1894
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_sa_6",
+      "before_sha256": "69e73ebd021aad9cf4140f6506373fd6aa1c48c0b53d8240e7e03f84f1fb02e6",
+      "after_sha256": "1dd553911acd30761fcd8c826580e3115b019dc8fb1967ba9a3d91bbaa7b9744",
+      "dimensions": [
+        3634,
+        4084
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_sa_7",
+      "before_sha256": "bab7dc318d0b676efa4413d2f6de8b9194cb5489b35d7380abc5927c05a453e9",
+      "after_sha256": "bcc1a322687a6424051a51e50115609f944f7c74bc579a9a80100da48100a5b9",
+      "dimensions": [
+        3634,
+        4084
+      ]
+    },
+    {
+      "chart_id": "pcp_rem_sa_8",
+      "before_sha256": "34534f231be10021d5490108e1b6a38a9761a1c26d726e395ca42b2f952b3af8",
+      "after_sha256": "f0f17c08902185049fc68fdbe62d507cbf88cf66beec1b985cf7cb7a8af2bbe0",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_und_sa_5",
+      "before_sha256": "7efcdae5a1f3cdcfc919a21c1ef8fc5a1707440d36b30de5bf37abd854b84c10",
+      "after_sha256": "4f0936ebff767640625075a853dad24a25f2bf18d4100abb3d0a0a5ae59cf716",
+      "dimensions": [
+        3181,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_und_sa_6",
+      "before_sha256": "7aa6aaf6a680b3f5e20eb8793631be0865516277f7b41ee2c303d1d943cc7865",
+      "after_sha256": "788c71e54dc4e1dad0f9cffff7a04567159aee0de41d95e2c72030b42cf333ce",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_und_sa_7",
+      "before_sha256": "608628c3c5cb6678d2d66cc4c8b2a826ea4233eb8be1687e15d5f72bfa874aa9",
+      "after_sha256": "23544bf8577aac93f040bd6ae1b2f05e9bdae07e7027b6afd7e746319da96ef5",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_5",
+      "before_sha256": "7972b12c1ac9a86765acde7cafb2986aef6ec23c994599d914a51f974b35afd2",
+      "after_sha256": "1380df9cd7d87542043f877e349f7ad5eb27da19ccd0c427b131581ff528d19f",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_6",
+      "before_sha256": "662be85be7a459b8b7417fda9746b55bff36648e9f9ee26f1224a191a7265555",
+      "after_sha256": "af752b895b38afcdb224f3dfc6adb5665fa3406e814e8acae74309ec6366fb4a",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_7",
+      "before_sha256": "852d2185ee6e028d644903e6f40601a8a174a3e9f68edd0ffa5a18cd4a604fb3",
+      "after_sha256": "4c1fc9a6388c76be4fbf6d6de9173d3cb7f274a91dbc29a4233593859945540d",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_ana_sa_8",
+      "before_sha256": "27dd095092cfaae57a327f548a3dbbad89ee6ed78f7bd75a6db2d3235a1ac0a7",
+      "after_sha256": "c237ab7020639598b319519ea1f1454f4120133774d8554b30678686d4f6110c",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    },
+    {
+      "chart_id": "pcp_eval_sa_6",
+      "before_sha256": "fec435e501e807ab49cf9a0bc21aec76c0fd8fa652151569806259effaa326ab",
+      "after_sha256": "5dce0c04144ca65c2beb421e1326c59a0962406001c0722ff966b24ab88cb418",
+      "dimensions": [
+        3184,
+        1444
+      ]
+    }
+  ],
+  "kept_original": [
+    "pcp_rem_sa_1",
+    "pcp_rem_sa_2",
+    "pcp_und_sa_2",
+    "pcp_ana_sa_3",
+    "pcp_eval_sa_1",
+    "pcp_eval_sa_2",
+    "pcp_eval_sa_3",
+    "pcp_eval_sa_4",
+    "pcp_und_sa_8",
+    "pcp_eval_sa_5",
+    "pcp_eval_sa_7",
+    "pcp_eval_sa_8"
+  ],
+  "note": "Visual selection by study owner. Original versions remain in Git history."
+}

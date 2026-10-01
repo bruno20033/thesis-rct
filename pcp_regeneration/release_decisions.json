@@ -1,0 +1,246 @@
+{
+  "date": "2026-10-01",
+  "basis": "User visual review of all 40 side-by-side comparisons; delayed test 05 changed to keep original after preserving its deliberate label-size defect.",
+  "decisions": [
+    {
+      "block": "practice",
+      "question": 1,
+      "chart_id": "pcp_rem_fa_1",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 2,
+      "chart_id": "pcp_und_fa_1",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 3,
+      "chart_id": "pcp_ana_fa_1",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 4,
+      "chart_id": "pcp_eval_fa_10",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 5,
+      "chart_id": "pcp_rem_fa_2",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 6,
+      "chart_id": "pcp_und_fa_2",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 7,
+      "chart_id": "pcp_ana_fa_2",
+      "decision": "replace"
+    },
+    {
+      "block": "practice",
+      "question": 8,
+      "chart_id": "pcp_eval_fa_11",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 1,
+      "chart_id": "pcp_rem_sa_1",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 2,
+      "chart_id": "pcp_rem_sa_2",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 3,
+      "chart_id": "pcp_rem_sa_3",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 4,
+      "chart_id": "pcp_rem_sa_4",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 5,
+      "chart_id": "pcp_und_sa_1",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 1,
+      "chart_id": "pcp_und_sa_2",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 6,
+      "chart_id": "pcp_und_sa_3",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 7,
+      "chart_id": "pcp_und_sa_4",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 8,
+      "chart_id": "pcp_ana_sa_1",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 2,
+      "chart_id": "pcp_ana_sa_2",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 3,
+      "chart_id": "pcp_ana_sa_3",
+      "decision": "keep_original"
+    },
+    {
+      "block": "delayed",
+      "question": 4,
+      "chart_id": "pcp_ana_sa_9",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 9,
+      "chart_id": "pcp_eval_sa_1",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 10,
+      "chart_id": "pcp_eval_sa_2",
+      "decision": "keep_original"
+    },
+    {
+      "block": "delayed",
+      "question": 5,
+      "chart_id": "pcp_eval_sa_3",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 11,
+      "chart_id": "pcp_eval_sa_4",
+      "decision": "keep_original"
+    },
+    {
+      "block": "delayed",
+      "question": 6,
+      "chart_id": "pcp_rem_sa_5",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 7,
+      "chart_id": "pcp_rem_sa_6",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 8,
+      "chart_id": "pcp_rem_sa_7",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 9,
+      "chart_id": "pcp_rem_sa_8",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 10,
+      "chart_id": "pcp_und_sa_5",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 11,
+      "chart_id": "pcp_und_sa_6",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 12,
+      "chart_id": "pcp_und_sa_7",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 12,
+      "chart_id": "pcp_und_sa_8",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 13,
+      "chart_id": "pcp_ana_sa_5",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 14,
+      "chart_id": "pcp_ana_sa_6",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 13,
+      "chart_id": "pcp_ana_sa_7",
+      "decision": "replace"
+    },
+    {
+      "block": "immediate",
+      "question": 15,
+      "chart_id": "pcp_ana_sa_8",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 14,
+      "chart_id": "pcp_eval_sa_5",
+      "decision": "keep_original"
+    },
+    {
+      "block": "immediate",
+      "question": 16,
+      "chart_id": "pcp_eval_sa_6",
+      "decision": "replace"
+    },
+    {
+      "block": "delayed",
+      "question": 15,
+      "chart_id": "pcp_eval_sa_7",
+      "decision": "keep_original"
+    },
+    {
+      "block": "delayed",
+      "question": 16,
+      "chart_id": "pcp_eval_sa_8",
+      "decision": "keep_original"
+    }
+  ]
+}

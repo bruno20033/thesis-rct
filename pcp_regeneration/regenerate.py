@@ -14,6 +14,7 @@ import json
 import re
 import shutil
 import tarfile
+import textwrap
 import urllib.request
 from pathlib import Path
 
@@ -21,7 +22,9 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, PathPatch
+from matplotlib.path import Path as MplPath
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 
@@ -30,6 +33,38 @@ SOURCES = json.loads((HERE / "sources.json").read_text())
 DATA = HERE / "data"
 OUT = HERE / "out"
 COLORS = ["#1b9e77", "#d95f02", "#7570b3", "#e7298a", "#66a61e", "#e6ab02"]
+
+
+def plain_number(value: float) -> str:
+    """Readable axis values, including large counts and small decimals."""
+    if abs(value) >= 1000:
+        return f"{value:,.0f}"
+    if abs(value) >= 10:
+        return f"{value:,.1f}".rstrip("0").rstrip(".")
+    return f"{value:,.6f}".rstrip("0").rstrip(".") or "0"
+
+
+def readable_axis_label(label: str, axis_count: int, compact: bool = False) -> str:
+    """Break long headings at words, dots or underscores before axes collide."""
+    if not compact and len(label) <= (19 if axis_count <= 4 else 13):
+        return label
+    # Retain punctuation while making it a legal line-break point.
+    separable = re.sub(r"([._])", r"\1 ", label)
+    width = 11 if compact else (19 if axis_count <= 4 else (15 if axis_count <= 6 else 12))
+    return textwrap.fill(separable, width=width, break_long_words=False)
+
+
+def curve_path(x: np.ndarray, row: np.ndarray) -> MplPath:
+    """Smoothly connect adjacent parallel axes without moving their values."""
+    vertices = [(float(x[0]), float(row[0]))]
+    codes = [MplPath.MOVETO]
+    for left in range(len(x) - 1):
+        x0, x1 = float(x[left]), float(x[left + 1])
+        y0, y1 = float(row[left]), float(row[left + 1])
+        vertices.extend([(x0 + .38 * (x1 - x0), y0),
+                         (x1 - .38 * (x1 - x0), y1), (x1, y1)])
+        codes.extend([MplPath.CURVE4] * 3)
+    return MplPath(vertices, codes)
 
 
 def fetch(name: str) -> Path:
@@ -160,7 +195,8 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
         tick_labels: list[list[str]] | None = None,
         selection_brush: tuple[int, float, float] | None = None,
         endpoint_labels: list[bool] | None = None,
-        show_legend: bool = True) -> None:
+        show_legend: bool = True, curved: bool = False,
+        compact_labels: bool = False) -> None:
     """Draw a publication-quality PCP with independent axis scales.
 
     Every value is transformed only for display.  The original data frame stays
@@ -184,34 +220,43 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
     x = np.arange(len(columns))
 
     ax.set_xlim(-0.25, len(columns) - 0.75)
-    ax.set_ylim(-0.13, 1.17)
+    ax.set_ylim(-0.15, 1.25)
     ax.axis("off")
     if bad == "tiny-labels":
-        label_size, tick_size = 4.5, 3.5
+        # This relative size defect is the correct answer for delayed test 05.
+        label_size, tick_size = 7.5, 11.0
     elif bad == "crowded-labels":
         label_size, tick_size = 7.0, 6.0
     else:
-        label_size, tick_size = 8.5, 7.0
+        label_size, tick_size = (11.5 if len(columns) >= 6 else 13.0), 11.0
+    if compact_labels:
+        label_size, tick_size = 10.5, 9.0
+
+    if tick_values is None and bad != "missing-ticks":
+        tick_values = []
+        for low, high in zip(lo, hi):
+            candidates = MaxNLocator(nbins=5).tick_values(low, high)
+            tick_values.append([float(value) for value in candidates if low < value < high])
 
     for i, (label, low, high) in enumerate(zip(labels, lo, hi)):
-        ax.plot([i, i], [0, 1], color="#556270", lw=0.8, zorder=3)
+        ax.plot([i, i], [0, 1], color="#45525d", lw=1.35, zorder=3)
         if bad != "missing-ticks" and (endpoint_labels is None or endpoint_labels[i]):
             top_value, bottom_value = (low, high) if i in flip else (high, low)
-            ax.text(i, 1.025, f"{top_value:g}", ha="center", va="bottom", fontsize=tick_size,
-                    color="#455a64")
-            ax.text(i, -0.025, f"{bottom_value:g}", ha="center", va="top", fontsize=tick_size,
-                    color="#455a64")
+            ax.text(i, 1.025, plain_number(top_value), ha="center", va="bottom", fontsize=tick_size,
+                    fontweight="bold", color="#374b55")
+            ax.text(i, -0.025, plain_number(bottom_value), ha="center", va="top", fontsize=tick_size,
+                    fontweight="bold", color="#374b55")
         if bad == "missing-labels":
             continue
-        rendered = label
+        rendered = readable_axis_label(label, len(columns), compact_labels)
         if bad == "crowded-labels":
             rendered = f"{label}\n{label}"
-        ax.text(i, 1.115 if labels_top else -0.10, rendered,
+        ax.text(i, 1.15 if labels_top else -0.11, rendered,
                 ha="center", va="bottom" if labels_top else "top", fontsize=label_size,
-                rotation=0 if bad != "crowded-labels" else 67, color="#263238")
+                fontweight="bold", rotation=0 if bad != "crowded-labels" else 67, color="#263238")
         if axis_annotations:
             ax.text(i, 1.072, axis_annotations[i], ha="center", va="bottom",
-                    fontsize=tick_size, color="#263238")
+                    fontsize=tick_size, fontweight="bold", color="#263238")
         if tick_values:
             for tick_index, tick in enumerate(tick_values[i]):
                 pos = (tick - low) / (high - low)
@@ -219,10 +264,10 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
                     pos = 1 - pos
                 render_endpoint = endpoint_labels is not None and not endpoint_labels[i]
                 if 0 < pos < 1 or (render_endpoint and 0 <= pos <= 1):
-                    ax.plot([i - .018, i], [pos, pos], color="#556270", lw=.75, zorder=3)
-                    text = tick_labels[i][tick_index] if tick_labels else f"{tick:g}"
+                    ax.plot([i - .026, i], [pos, pos], color="#45525d", lw=1.15, zorder=3)
+                    text = tick_labels[i][tick_index] if tick_labels else plain_number(tick)
                     ax.text(i - .03, pos, text, ha="right", va="center",
-                            fontsize=tick_size, color="#455a64")
+                            fontsize=tick_size, fontweight="bold", color="#374b55")
     if selection_brush:
         axis, lower, upper = selection_brush
         bottom = (lower - lo[axis]) / (hi[axis] - lo[axis])
@@ -239,10 +284,10 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
         color_lookup = category_colors or {key: COLORS[i % len(COLORS)] for i, key in enumerate(keys)}
         colors = [color_lookup.get(category, "#1f77b4") for category in categories]
         shown_colors = legend_colors or color_lookup
-        handles = [Line2D([0], [0], color=shown_colors[key], lw=4, label=str(key)) for key in keys]
+        handles = [Line2D([0], [0], color=shown_colors[key], lw=5, label=str(key)) for key in keys]
         if show_legend:
             ax.legend(handles=handles, title=legend_title or color_by, frameon=False,
-                      loc="center left", bbox_to_anchor=(1.02, .5), fontsize=8, title_fontsize=9)
+                      loc="center left", bbox_to_anchor=(1.02, .5), fontsize=11, title_fontsize=12)
     elif palette:
         series = (pd.to_numeric(frame.loc[d.index, palette_by], errors="coerce").to_numpy()
                   if palette_by else values[:, -1])
@@ -256,25 +301,45 @@ def pcp(ax, frame: pd.DataFrame, columns: list[str], labels: list[str] | None = 
             mappable = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
             mappable.set_array(series)
             colorbar = ax.figure.colorbar(mappable, ax=ax, fraction=.045, pad=.035)
-            colorbar.set_label(colorbar_label, fontsize=9)
-            colorbar.ax.tick_params(labelsize=8)
+            colorbar.set_label(colorbar_label, fontsize=12, fontweight="bold")
+            colorbar.ax.tick_params(labelsize=11)
     else:
         colors = ["#1f77b4"] * len(values)
     if bad == "too-many-colors":
         colors = [COLORS[i % len(COLORS)] for i in range(len(values))]
 
+    draw_width = max(1.0, linewidth * 1.9)
     for row, color in zip(scaled, colors):
-        ax.plot(x, row, color=color, alpha=alpha, lw=linewidth, solid_capstyle="round")
+        if curved:
+            ax.add_patch(PathPatch(curve_path(x, row), facecolor="none", edgecolor=color,
+                                   alpha=alpha, lw=draw_width, capstyle="round"))
+        else:
+            ax.plot(x, row, color=color, alpha=alpha, lw=draw_width, solid_capstyle="round")
     if highlight is not None:
         h = numeric(highlight, columns).to_numpy(dtype=float)
         hscaled = (h - source_lo) / source_span if normalise_unit else (h - lo) / span
         for i in flip:
             hscaled[:, i] = 1 - hscaled[:, i]
         for row in hscaled:
-            ax.plot(x, row, color="#0d47a1", alpha=0.9, lw=1.3, zorder=4)
+            ax.plot(x, row, color="#0d47a1", alpha=0.9, lw=2.4, zorder=4)
 
 
 def save(fig: plt.Figure, stem: str, result: dict) -> None:
+    for ax in fig.axes:
+        ax.title.set_fontweight("bold")
+        ax.title.set_fontsize(max(ax.title.get_fontsize(), 15))
+        ax.xaxis.label.set_fontweight("bold")
+        ax.yaxis.label.set_fontweight("bold")
+        ax.xaxis.label.set_fontsize(max(ax.xaxis.label.get_fontsize(), 12))
+        ax.yaxis.label.set_fontsize(max(ax.yaxis.label.get_fontsize(), 12))
+        for tick in [*ax.get_xticklabels(), *ax.get_yticklabels()]:
+            tick.set_fontweight("bold")
+            tick.set_fontsize(max(tick.get_fontsize(), 10))
+        legend = ax.get_legend()
+        if legend:
+            legend.get_title().set_fontweight("bold")
+            for label in legend.get_texts():
+                label.set_fontweight("bold")
     for typ, kwargs in (("svg", {}), ("png", {"dpi": 300})):
         target = OUT / typ
         target.mkdir(parents=True, exist_ok=True)
@@ -296,7 +361,7 @@ def panel(stem, frame, variants, figsize=(13, 4.8), ncols=None):
     for ax, variant in zip(np.ravel(axes), variants):
         chart = {key: value for key, value in variant.items() if key != "title"}
         pcp(ax, frame, **chart)
-        ax.set_title(variant.get("title", ""), fontsize=10, fontweight="bold", loc="left")
+        ax.set_title(variant.get("title", ""), fontsize=15, fontweight="bold", loc="left")
     save(fig, stem, GENERATED)
 
 
@@ -344,7 +409,7 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
            legend_title="Species", alpha=.38, linewidth=.9)
     single("pcp_rem_sa_8", iris, iris_cols,
            ["Sepal_Length", "Sepal_Width", "Petal_Length", "Petal_Width"], labels_top=True,
-           palette="RdYlGn", alpha=.50, linewidth=.8)
+           palette="RdYlGn", alpha=.50, linewidth=.8, curved=True)
 
     diamonds = frames["diamonds"]
     # The recognition chart intentionally shows a small illustrative sample,
@@ -437,7 +502,7 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
            palette="viridis", alpha=.20, linewidth=.65)
     single("pcp_ana_sa_7", nutrients_for_fat, fat_cols[:3], fat_cols[:3],
            limits=fat_limits[:3], palette="plasma", alpha=.09, linewidth=.35,
-           labels_top=True)
+           labels_top=True, curved=True)
 
     nutrients = frames["nutrients"]
     nutrient_cols = ["calcium (g)", "water (g)", "fiber (g)", "monounsat (g)"]
@@ -596,7 +661,7 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     panel("pcp_und_sa_1", county, [
         dict(columns=county_cols, labels=county_labels, limits=county_limits, labels_top=True, title="(a)", alpha=.035, linewidth=.32),
         dict(columns=county_cols, labels=county_labels, limits=county_limits, labels_top=True, flip={1}, title="(b)", alpha=.035, linewidth=.32),
-    ], figsize=(14, 4.8))
+    ], figsize=(11, 10), ncols=1)
     # The original image does not name the dark-blue selected county.  Select
     # a record matching its displayed location (about $50k household, $25k per
     # capita, 13% poverty, very low density) but keep the item as a candidate
@@ -674,7 +739,12 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
            ["bill_length_mm", "bill_depth_mm", "flipper_length_mm"], labels_top=True,
            color_by=resolve(penguins_eval, "species"),
            category_colors={"Gentoo": "#fff8c7", "Chinstrap": "#5aaec1", "Adelie": "#13245b"},
-           legend_title="species", limits=[(40, 60), (10, 22), (170, 230)], alpha=.38, linewidth=.55)
+           legend_title="species", limits=[(40, 60), (10, 22), (170, 230)],
+           # The first axis intentionally has a 20 label between 50 and 60.
+           # Preserve that answer-bearing error while restoring intermediate ticks.
+           tick_values=[[47, 53], [14, 18], [190, 210]],
+           tick_labels=[["50", "20"], ["14", "18"], ["190", "210"]],
+           alpha=.38, linewidth=.55)
 
     # The original includes 3- and 5-cylinder cars, so it is the Auto MPG
     # table rather than mtcars (which has only 4, 6 and 8 cylinders).
@@ -723,13 +793,13 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
              color_by="group", category_colors={"high": "#f05b5b", "middle": "#8b8b8b", "low": "#5064e8"},
              limits=[(0, .65), (0, .8), (0, .9)],
              tick_values=[[.1, .2, .3, .4, .5, .6], [.2, .4, .6], [.2, .4, .6, .8],
-             ], axis_annotations=["2006", "2013", "2006"], alpha=.58, linewidth=.85, labels_top=True),
+             ], axis_annotations=["2006", "2013", "2006"], alpha=.58, linewidth=.85, labels_top=True, curved=True),
         dict(columns=["Fever or Malaria cases (%)", "Poverty Rate", "Malaria cases (%)"],
              labels=["Fever or Malaria cases (%)", "Poverty Rate", "Malaria cases (%)"], title="(b)",
              color_by="group", category_colors={"high": "#f05b5b", "middle": "#8b8b8b", "low": "#5064e8"},
              limits=[(0, .65), (0, .9), (0, .8)],
              tick_values=[[.1, .2, .3, .4, .5, .6], [.2, .4, .6, .8], [.2, .4, .6],
-             ], axis_annotations=["2006", "2006", "2013"], alpha=.58, linewidth=.85, labels_top=True),
+             ], axis_annotations=["2006", "2006", "2013"], alpha=.58, linewidth=.85, labels_top=True, curved=True),
     ], figsize=(13, 5.1))
 
     sweep = pd.DataFrame({
@@ -748,14 +818,19 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     def choice_title(ax, label):
         ax.set_title(f"({label})", loc="left", fontsize=12, color="#555", pad=8)
 
-    # Remember SA3: exactly one PCP (C) among five chart types.
-    fig, axes = plt.subplots(1, 5, figsize=(17, 4.4), constrained_layout=True)
+    # Five options need a two-column, three-row grid to remain legible in the embed.
+    # The sixth cell stays empty; option C remains the only PCP.
+    fig, grid = plt.subplots(3, 2, figsize=(12, 13.5), constrained_layout=True)
+    axes = grid.ravel()
+    axes[5].axis("off")
     x = rng.normal(1.2, 1, 1200); y = rng.normal(1.2, 1, 1200)
     axes[0].hexbin(x, y, gridsize=23, cmap="Spectral_r"); axes[0].set_xlabel("x"); axes[0].set_ylabel("y"); choice_title(axes[0], "A")
     counts = np.array([[32, 24, 16], [14, 3, 17], [6, 4, 15], [8, 2, 2]])
     axes[1].bar(np.arange(4), counts[:, 0], color="#e5766b"); axes[1].bar(np.arange(4), counts[:, 1], bottom=counts[:, 0], color="#58b947"); axes[1].bar(np.arange(4), counts[:, 2], bottom=counts[:, :2].sum(axis=1), color="#6488df"); choice_title(axes[1], "B")
     mini = pd.DataFrame(rng.normal(size=(30, 5)), columns=["Points", "Field goal", "3-point", "Rebounds", "Assists"])
-    pcp(axes[2], mini, mini.columns.tolist(), mini.columns.tolist(), alpha=.22, linewidth=.55, labels_top=True); choice_title(axes[2], "C")
+    pcp(axes[2], mini, mini.columns.tolist(), mini.columns.tolist(), alpha=.22, linewidth=.55,
+        labels_top=True, compact_labels=True, endpoint_labels=[False] * 5,
+        tick_values=[[] for _ in range(5)]); choice_title(axes[2], "C")
     axes[3].plot(np.arange(1, 11), rng.normal(size=10).cumsum(), color="#7db6a6", lw=2, ls="--"); axes[3].grid(alpha=.2); choice_title(axes[3], "D")
     layers = rng.dirichlet(np.ones(5), 8).T; axes[4].stackplot(np.arange(1, 9), layers, colors=["#db8fd0", "#ad8edb", "#77b7df", "#99c47c", "#e5c875"]); axes[4].set_ylim(0, 1); choice_title(axes[4], "E")
     save(fig, "pcp_rem_sa_3", GENERATED)
@@ -769,21 +844,27 @@ def build(frames: dict[str, pd.DataFrame]) -> None:
     save(fig, "pcp_rem_sa_5", GENERATED)
 
     # Remember SA6: five chart families with the iris PCP as choice C.
-    fig, axes = plt.subplots(1, 5, figsize=(17, 4.4), constrained_layout=True)
+    fig, grid = plt.subplots(3, 2, figsize=(12, 13.5), constrained_layout=True)
+    axes = grid.ravel()
+    axes[5].axis("off")
     xx = np.linspace(0, 8, 250)
     for mu, col, name in [(2, "#4caf50", "Helen"), (4, "#87aef9", "Patricia"), (6, "#ff9e99", "Ashley")]: axes[0].plot(xx, np.exp(-.5*((xx-mu)/.75)**2), color=col, label=name)
     axes[0].legend(frameon=False, fontsize=7); choice_title(axes[0], "A")
     axes[1].stackplot(np.arange(1, 8), rng.uniform(25, 75, (6, 7)), colors=["#e95ac8", "#9476e7", "#18aeda", "#1db5a0", "#13a43c", "#d0b400"]); choice_title(axes[1], "B")
-    pcp(axes[2], iris, iris_cols, iris_labels, color_by=resolve(iris, "species"), category_colors={"setosa": "#e74c3c", "versicolor": "#4f7fb8", "virginica": "#5ca65c"}, alpha=.22, linewidth=.5, labels_top=True); choice_title(axes[2], "C")
+    pcp(axes[2], iris, iris_cols, iris_labels, color_by=resolve(iris, "species"),
+        category_colors={"setosa": "#e74c3c", "versicolor": "#4f7fb8", "virginica": "#5ca65c"},
+        alpha=.22, linewidth=.5, labels_top=True, compact_labels=True); choice_title(axes[2], "C")
     for idx, col in enumerate(["#f0dc6c", "#73b369", "#8171a8"]): axes[3].fill_between(xx, 0, np.exp(-.5*((xx-(1.8+idx))/1.0)**2)/(idx+2), color=col, alpha=.55)
     choice_title(axes[3], "D")
     axes[4].scatter(mtcars["wt"], mtcars["mpg"], s=25+mtcars["hp"]*.25, c=mtcars["hp"], cmap="Blues", alpha=.75); axes[4].set_xlabel("wt"); axes[4].set_ylabel("mpg"); choice_title(axes[4], "E")
     save(fig, "pcp_rem_sa_6", GENERATED)
 
     # Remember SA7: the penguins PCP is the sole PCP choice (B).
-    fig, axes = plt.subplots(1, 5, figsize=(17, 4.4), constrained_layout=True)
+    fig, grid = plt.subplots(3, 2, figsize=(12, 13.5), constrained_layout=True)
+    axes = grid.ravel()
+    axes[5].axis("off")
     axes[0].hist(ames["SalePrice"].dropna() / 1000, bins=22, color="#78b8ab"); axes[0].set_xlabel("price"); choice_title(axes[0], "A")
-    pcp(axes[1], penguins_eval, [resolve(penguins_eval, "bill_length_mm"), resolve(penguins_eval, "bill_depth_mm"), resolve(penguins_eval, "flipper_length_mm")], ["bill_length_mm", "bill_depth_mm", "flipper_length_mm"], color_by=resolve(penguins_eval, "species"), category_colors={"Adelie": "#4c4f94", "Chinstrap": "#b081b7", "Gentoo": "#e1d640"}, alpha=.20, linewidth=.4, labels_top=True); choice_title(axes[1], "B")
+    pcp(axes[1], penguins_eval, [resolve(penguins_eval, "bill_length_mm"), resolve(penguins_eval, "bill_depth_mm"), resolve(penguins_eval, "flipper_length_mm")], ["bill_length_mm", "bill_depth_mm", "flipper_length_mm"], color_by=resolve(penguins_eval, "species"), category_colors={"Adelie": "#4c4f94", "Chinstrap": "#b081b7", "Gentoo": "#e1d640"}, alpha=.20, linewidth=.4, labels_top=True, compact_labels=True); choice_title(axes[1], "B")
     axes[2].pie([36, 29, 14, 9, 12], labels=["Gr-C", "Gr-B", "Gr-A", "Gr-D", "Gr-E"], colors=["#899fca", "#ff895c", "#68c2a3", "#dd87bd", "#a9d94d"]); choice_title(axes[2], "C")
     for x0, y0, w, h, c in [(0, .5, .65, .5, "#d91e05"), (0, 0, .65, .5, "#35a03b"), (.65, 0, .35, 1, "#287fac")]: axes[3].add_patch(Rectangle((x0,y0),w,h,facecolor=c,edgecolor="white"))
     axes[3].set_xlim(0,1); axes[3].set_ylim(0,1); axes[3].axis("off"); choice_title(axes[3], "D")

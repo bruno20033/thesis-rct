@@ -1,10 +1,8 @@
 # High-resolution PCP stimulus regeneration
 
 This directory is the reproducible replacement pipeline for the 40
-parallel-coordinates-plot (PCP) stimuli used in the experiment.  It is
-deliberately separate from `../charts/`: the original stimuli must not be
-silently overwritten before each replacement has passed an item-level
-measurement-equivalence review.
+parallel-coordinates-plot (PCP) stimuli used in the experiment. Candidate
+images are generated separately from the served assets in `../charts/`.
 
 ## Why this exists
 
@@ -41,7 +39,23 @@ This downloads only open data into `data/` (which is ignored), then writes
 source-derived candidate replacements to `out/{svg,png}/` and a `validation.json`
 ledger.  It never writes into `../charts/`.
 
-## Release gate
+## Reviewed release
+
+The study owner reviewed all 40 candidates side by side and selected the
+28 replacements recorded in `release_decisions.json`. The remaining 12
+original images stay in `../charts/`; delayed test 05 was explicitly retained
+because its small axis titles are the answer-bearing defect. Run
+`python release_selected.py` after generation to copy only the selected PNGs
+into `../charts/`. `release_result.json` records the original and replacement
+hashes and replacement dimensions. The original PNGs are also recoverable
+from Git history. The embed versions PCP URLs so returning participants do
+not see cached originals.
+
+This was a study-owner visual selection, **not** a claim that all candidate
+charts passed an independent measurement-equivalence audit. The checklist
+below remains the standard for any further chart replacements.
+
+## Further release checklist
 
 Do not deploy a regenerated image until all four checks have a documented
 PASS:
@@ -50,9 +64,6 @@ PASS:
 2. axis names, order, direction and range;
 3. filters, selections, colour encoding and any intentional fault;
 4. answer-key equivalence, independently checked against the original item.
-
-The old PNG remains the canonical deployed asset for every item until that
-gate is complete.
 
 `validation.json` also contains a small `answer_logic_audit`. It asserts the
 recoverable facts that matter for the revised car-selection, college-ranking,
@@ -66,12 +77,12 @@ table is pinned and validated in `sources.json`. This verifies their public
 data provenance, but not yet the original's row selection, chart transformation
 or measurement equivalence. The eight added training items are also
 source-pinned and are already served at high resolution. Six released items
-are high-resolution,
-deterministic structural redraws of assessment illustrations whose original
-tables were not included in the public BTPL release. They are identified under
-`structural_reconstructions` in `out/validation.json` and **must not** replace
-the study asset until the study authors provide the tables or confirm
-measurement equivalence.
+are high-resolution, deterministic structural redraws of assessment
+illustrations whose original tables were not included in the public BTPL
+release. They are identified under `structural_reconstructions` in
+`out/validation.json`. Their provenance limitation still applies to any
+owner-selected replacements; the selection does not establish that their
+underlying records match the original tables.
 
 See [SOURCE_RECOVERY.md](SOURCE_RECOVERY.md) for the public-source audit and
 the exact material needed to clear those six items.
