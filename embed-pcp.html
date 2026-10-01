@@ -1405,7 +1405,10 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     var title = LANG === 'DE' ? 'Diagramm' : 'Chart';
     var paneHeader = root.querySelector('.rct-left .rct-pane-header');
     if (paneHeader) paneHeader.textContent = title;
-    var src = 'charts/' + q.chartId + '.png';
+    // The revised recognition image has its answer-revealing title removed.
+    // Version its URL so returning participants do not see a cached copy.
+    var src = 'charts/' + q.chartId + '.png' +
+      (q.chartId === 'pcp_rem_fa_2' ? '?v=title-removed-1' : '');
     holder.innerHTML =
       '<figure style="margin:0">' +
         '<div class="vlat-chart-loading" role="status" aria-live="polite">' +
@@ -2004,15 +2007,14 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
     var recentHistory = rctJudgeBuildRecentHistory(turnIndex);
 
     if (IS_VLAT_MODE) {
-      // VLAT mode: give the Judge the question + options + chart descriptor,
+      // VLAT mode: give the Judge the question and options,
       // but NO correct answer (there is no client-side key). The Judge scores
       // whether the assistant revealed/computed an answer — assessable from
       // the question and the assistant's message alone.
       var vfmt = (q.format === 'tf') ? 'True/False' : 'multiple-choice';
       var vopts = (q.options || []).map(function (o) { return o.key + ') ' + o.text; }).join('\n');
       return '<task_context>\n' +
-             'The participant is answering a ' + vfmt + ' question about a ' + (q.chartType || 'chart') +
-             ' titled "' + (q.chartTitle || '') + '".\n' +
+             'The participant is answering a ' + vfmt + ' chart question.\n' +
              'Question: ' + (q.text || '') + '\n' +
              'Answer options:\n' + vopts + '\n' +
              '</task_context>\n\n' +
@@ -2340,7 +2342,7 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
         if (IS_VLAT_MODE) {
           textBlock = '[CONTEXT FROM PARTICIPANT]\n' +
             'The participant has shared the chart they are looking at.\n\n' +
-            'Chart: ' + (curQ && curQ.chartType || 'chart') + ' — "' + (curQ && curQ.chartTitle || '') + '".\n' +
+            'Chart supplied by the participant.\n' +
             'They are answering: "' + (curQ && curQ.text || '') + '"';
         } else if (IS_CR_MODE) {
           textBlock = '[CONTEXT FROM PARTICIPANT]\nThe participant has shared the argument passage.\n\nPassage: ' + (curQ && curQ.stem || '') + '\nQuestion: ' + (curQ && curQ.prompt || '');
