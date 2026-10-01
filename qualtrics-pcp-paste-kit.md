@@ -28,6 +28,12 @@ Question Text (`<>` HTML source):
 Add JavaScript ← copy ALL of:
 `https://raw.githubusercontent.com/bruno20033/thesis-rct/main/qualtrics-pcp-train-js.js`
 
+**For the practice loading cue:** re-paste the current bridge JS into the Add
+JavaScript panel of **both** practice questions. It places a loading overlay in
+Qualtrics before the GitHub iframe is ready. The loading screen inside
+`embed-pcp.html` updates automatically from GitHub Pages, but the parent overlay
+cannot update until the Qualtrics JS panels are re-saved.
+
 ### Slot 2 — Aided practice, **SEARCH arm** (RQ2 productivity; control)
 
 Question Text (`<>` HTML source):

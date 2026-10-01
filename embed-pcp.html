@@ -44,6 +44,22 @@
        which grows the iframe, etc. Use a fixed minimum instead. */
   }
 
+  .rct-boot-loading {
+    flex: 1; min-height: 480px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 14px;
+    background: #fff; border-radius: 4px; color: #455a64;
+    text-align: center; font-size: 15px;
+  }
+  .rct-boot-spinner {
+    width: 40px; height: 40px; border: 4px solid #cfd8dc;
+    border-top-color: #1976d2; border-radius: 50%;
+    animation: rct-boot-spin 0.8s linear infinite;
+  }
+  @keyframes rct-boot-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .rct-boot-spinner { animation: none; border-color: #1976d2; }
+  }
+
   .rct-root {
     display: flex; flex-direction: column; gap: 16px;
     padding: 16px;
@@ -333,10 +349,29 @@
 </style>
 </head>
 <body>
-<div class="rct-root" id="rct-root"></div>
+<div class="rct-root" id="rct-root">
+  <div class="rct-boot-loading" id="rct-boot-loading" role="status" aria-live="polite">
+    <span class="rct-boot-spinner" aria-hidden="true"></span>
+    <span id="rct-boot-message">Loading practice…</span>
+  </div>
+</div>
+<script>
+(function () {
+  var message = document.getElementById('rct-boot-message');
+  var german = new URLSearchParams(location.search).get('lang');
+  german = german && german.slice(0, 2).toUpperCase() === 'DE';
+  if (german) message.textContent = 'Übung wird geladen…';
+  setTimeout(function () {
+    if (!document.getElementById('rct-boot-loading')) return;
+    message.textContent = german
+      ? 'Das Laden dauert länger als erwartet. Bitte warten Sie noch einen Moment.'
+      : 'Loading is taking longer than expected. Please wait a moment.';
+  }, 20000);
+})();
+</script>
 
-<!-- VLAT item bank (Kim, Lee & Kwon 2017). This engine serves the 9
-     practice-block items as the aided 3-arm training phase. -->
+<!-- PCP item bank. This engine serves 8 released practice items plus 8
+     training-only extension items as the aided 3-arm training phase. -->
 <script src="pcp_items_data.js"></script>
 <script src="pcp_items_de.js"></script>
 <script src="pcp_training_extension.js"></script>
@@ -2744,6 +2779,13 @@ You are a concise Socratic tutor. Help the participant perform the next reasonin
   }
 
   persist();
+  // Qualtrics may install its bridge after this initial persist event. Answer
+  // later readiness probes so the parent loading overlay can always clear.
+  window.addEventListener('message', function (event) {
+    if (event.source === window.parent && event.data && event.data.type === 'rct_ready_probe') {
+      postToParent({ type: 'rct_ready' });
+    }
+  });
   postHeight();
   // Do NOT listen for window resize — when the Qualtrics parent
   // resizes the iframe to fit our content, the iframe's window fires
