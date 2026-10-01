@@ -7,7 +7,7 @@
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-         background: #fff; color: #1a1a2e; padding: 24px; max-width: 800px; margin: 0 auto; }
+         background: #fff; color: #1a1a2e; padding: 24px; max-width: 900px; margin: 0 auto; }
 
   /* ── Progress & Timer ── */
   .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
@@ -20,7 +20,18 @@
 
   /* ── Chart ── */
   .chart-container { text-align: center; margin-bottom: 24px; }
-  .chart-container img { max-width: 700px; width: 100%; border: 1px solid #dee2e6; border-radius: 8px; }
+  .chart-container img { max-width: 760px; width: 100%; border: 1px solid #dee2e6; border-radius: 8px; }
+  .chart-loading { width: 100%; max-width: 760px; aspect-ratio: 1; margin: 0 auto;
+                   display: flex; flex-direction: column; align-items: center; justify-content: center;
+                   gap: 16px; background: #f8f9fa; border: 2px dashed #ced4da;
+                   border-radius: 8px; color: #495057; font-size: 1rem; font-weight: 600; }
+  .chart-loading-spinner { width: 38px; height: 38px; border: 4px solid #d0ebff;
+                           border-top-color: #228be6; border-radius: 50%;
+                           animation: chart-spin 0.8s linear infinite; }
+  @keyframes chart-spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .chart-loading-spinner { animation: none; border-color: #228be6; }
+  }
   .chart-placeholder { max-width: 700px; margin: 0 auto; padding: 60px 40px; background: #f8f9fa;
                         border: 2px dashed #ced4da; border-radius: 8px; color: #868e96; text-align: center; }
   .chart-placeholder .title { font-size: 1.1rem; font-weight: 600; color: #495057; margin-bottom: 8px; }
@@ -104,10 +115,12 @@
   // Static UI strings.
   var UI = {
     EN: { question: 'Question', of: 'of', next: 'Next', idk: "I don't know",
+          chartLoading: 'Loading chart…',
           completeTitle: 'Block Complete',
           completeBody: 'Your responses have been recorded. Please wait...',
           noItems: 'No items found for block: ', chartFail: 'Chart image not loaded — ' },
     DE: { question: 'Frage', of: 'von', next: 'Weiter', idk: 'Ich weiß es nicht',
+          chartLoading: 'Diagramm wird geladen…',
           completeTitle: 'Block abgeschlossen',
           completeBody: 'Ihre Antworten wurden gespeichert. Bitte warten …',
           noItems: 'Keine Items für diesen Block gefunden: ', chartFail: 'Diagrammbild nicht geladen — ' }
@@ -200,6 +213,13 @@
     post({ type: 'rct_height', value: document.body.scrollHeight });
   }
 
+  function setAnswersEnabled(enabled) {
+    var inputs = elOptions.querySelectorAll('input');
+    for (var i = 0; i < inputs.length; i++) inputs[i].disabled = !enabled;
+    elOptions.style.pointerEvents = enabled ? '' : 'none';
+    elOptions.style.opacity = enabled ? '' : '0.55';
+  }
+
   // ── Render current item ──
   function renderItem() {
     var item = items[currentIndex];
@@ -216,13 +236,16 @@
     chartImg.alt = chartTitle;
     chartImg.decoding = 'async';
     chartImg.fetchPriority = 'high';
-    elChart.replaceChildren(chartImg);
+    elChart.innerHTML = '<div class="chart-loading" role="status" aria-live="polite">' +
+      '<span class="chart-loading-spinner" aria-hidden="true"></span><span>' +
+      escHtml(t('chartLoading')) + '</span></div>';
+    var loadingEl = elChart.firstChild;
     var fallbackTried = false;
     function startWhenVisible() {
-      if (chartReady || elChart.firstChild !== chartImg) return;
+      if (chartReady || elChart.firstChild !== loadingEl) return;
+      elChart.replaceChildren(chartImg);
       chartReady = true;
-      elOptions.style.pointerEvents = '';
-      elOptions.style.opacity = '';
+      setAnswersEnabled(true);
       itemStartTime = Date.now();
       timeRemaining = TIME_LIMIT;
       elTimer.textContent = TIME_LIMIT + 's';
@@ -240,6 +263,7 @@
       else startWhenVisible();
     });
     chartImg.addEventListener('error', function () {
+      if (elChart.firstChild !== loadingEl) return;
       if (!fallbackTried) {
         fallbackTried = true;
         chartImg.src = 'charts/' + item.chartId + '.png';
@@ -250,8 +274,7 @@
         escHtml(t('chartFail')) + escHtml(item.chartType) + ']</div></div>';
       // Preserve the old fail-open behaviour if both image formats are absent.
       chartReady = true;
-      elOptions.style.pointerEvents = '';
-      elOptions.style.opacity = '';
+      setAnswersEnabled(true);
       itemStartTime = Date.now();
       timeRemaining = TIME_LIMIT;
       elTimer.textContent = TIME_LIMIT + 's';
@@ -281,8 +304,7 @@
     elOptions.innerHTML = html;
 
     // Keep answers and the clock paused until the chart has decoded.
-    elOptions.style.pointerEvents = 'none';
-    elOptions.style.opacity = '0.55';
+    setAnswersEnabled(false);
     elTimer.textContent = '…';
     clearInterval(timerInterval);
 
